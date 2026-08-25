@@ -1,7 +1,7 @@
 #include "state_machine_event.h"
 
 char* stateMachineEventName(StateMachineEvent_t sEvent) {
-    switch(sEvent.id) {
+    switch(sEvent.eId) {
         case SM_EVENT_SYSTEM_READY:     return "SM_EVENT_SYSTEM_READY";
         case SM_EVENT_HALT:             return "SM_EVENT_HALT";
         case SM_EVENT_PUMP_ON:          return "SM_EVENT_PUMP_ON";

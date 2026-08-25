@@ -1,11 +1,9 @@
-#include <stdio.h>
 #include "state_machine.h"
 #include "state_machine_state.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "freertos/timers.h"
-#include "freertos/event_groups.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
 
 #define SM_QUEUE_LENGTH     10
 #define SM_TASK_STACK       4096
@@ -16,20 +14,6 @@ static const char* TAG = "SM";
 static QueueHandle_t s_pQueue = NULL;
 
 static StateMachineState_t s_eCurrentState = STATE_MACHINE_INIT;
-
-
-
-static void s_pTask(void* arg) {
-    StateMachineEvent_t s_sEvent;
-
-    while(true) {
-        if(pdTRUE == xQueueReceive(s_pQueue, &s_sEvent, portMAX_DELAY)){
-            ESP_LOGW(TAG, "Event: %s", stateMachineEventName(s_sEvent));
-
-            s_stateMachineProcessEvent(&s_sEvent);
-        }
-    }
-}
 
 
 static void s_stateMachineTransitionTo(StateMachineState_t eNewState) {
@@ -49,27 +33,40 @@ static void s_stateMachineTransitionTo(StateMachineState_t eNewState) {
 
 static void s_stateMachineProcessEvent(const StateMachineEvent_t* pEvent) {
 
-    if(SM_EVENT_HALT == pEvent->id || SM_EVENT_FAULT == pEvent->id) {
-        stateMachineTransitionTo(STATE_MACHINE_IDLE);
+    if(SM_EVENT_HALT == pEvent->eId) {
+        s_stateMachineTransitionTo(STATE_MACHINE_IDLE);
+        return;
+    }
+
+    if(SM_EVENT_FAULT == pEvent->eId) {
+        s_stateMachineTransitionTo(STATE_MACHINE_FAULT);
         return;
     }
 
     switch (s_eCurrentState) {
         case STATE_MACHINE_INIT:
+            switch(pEvent->eId) {
+                case SM_EVENT_SYSTEM_READY:
+                    s_stateMachineTransitionTo(STATE_MACHINE_IDLE);
+                    break;
+
+                default:
+                    break;
+            }
             break;
 
         case STATE_MACHINE_IDLE:
-            switch (pEvent->id) {
+            switch (pEvent->eId) {
                 case SM_EVENT_PUMP_ON:
-                    stateMachineTransitionTo(STATE_MACHINE_PUMPING);
+                    s_stateMachineTransitionTo(STATE_MACHINE_PUMPING);
                     break;
 
                 case SM_EVENT_LOWER_NOZZLE:
-                    stateMachineTransitionTo(STATE_MACHINE_LOWERING);
+                    s_stateMachineTransitionTo(STATE_MACHINE_LOWERING);
                     break;
 
                 case SM_EVENT_RAISE_NOZZLE:
-                    stateMachineTransitionTo(STATE_MACHINE_RAISING);
+                    s_stateMachineTransitionTo(STATE_MACHINE_RAISING);
                     break;
 
                 default:
@@ -79,25 +76,58 @@ static void s_stateMachineProcessEvent(const StateMachineEvent_t* pEvent) {
             break;
 
         case STATE_MACHINE_LOWERING:
-            break;
-
-        case STATE_MACHINE_PUMPING:
-            switch (pEvent->id) {
-                case SM_EVENT_PUMP_OFF:
-                case SM_EVENT_RC_SIGNAL_LOST:
-                    stateMachineTransitionTo(STATE_MACHINE_IDLE);
+            switch(pEvent->eId) {
+                case SM_EVENT_STOP_SPOOL:
+                case SM_EVENT_LIMIT_ACTIVE:
+                    s_stateMachineTransitionTo(STATE_MACHINE_IDLE);
+                    break;
+                
+                case SM_EVENT_RAISE_NOZZLE:
+                    s_stateMachineTransitionTo(STATE_MACHINE_RAISING);
                     break;
 
                 default:
-                    ESP_LOGE(TAG, "Not allowed. Pump is active");
+                    ESP_LOGW(TAG, "Not allowed. Nozzle is lowering");
+                    break;
+            }
+            break;
+
+        case STATE_MACHINE_PUMPING:
+            switch (pEvent->eId) {
+                case SM_EVENT_PUMP_OFF:
+                case SM_EVENT_RC_SIGNAL_LOST:
+                    s_stateMachineTransitionTo(STATE_MACHINE_IDLE);
+                    break;
+
+                default:
+                    ESP_LOGW(TAG, "Not allowed. Pump is active");
                     break;
             }
             break;
 
         case STATE_MACHINE_RAISING:
+            switch(pEvent->eId) {
+                case SM_EVENT_STOP_SPOOL:
+                case SM_EVENT_LIMIT_ACTIVE:
+                    s_stateMachineTransitionTo(STATE_MACHINE_IDLE);
+                    break;
+
+                default:
+                    ESP_LOGW(TAG, "Not allowed. Nozzle is raising");
+                    break;
+            }
             break;
 
         case STATE_MACHINE_FAULT:
+            switch(pEvent->eId) {
+                case SM_EVENT_RESET:
+                    s_stateMachineTransitionTo(STATE_MACHINE_IDLE);
+                    break;
+
+                default:
+                    ESP_LOGW(TAG, "Not allowed. System is in fault state");
+                    break;
+            }
             break;
 
         default:
@@ -107,8 +137,28 @@ static void s_stateMachineProcessEvent(const StateMachineEvent_t* pEvent) {
 }
 
 
+static void s_pTask(void* arg) {
+    StateMachineEvent_t s_sEvent;
+
+    while(true) {
+        if(pdTRUE == xQueueReceive(s_pQueue, &s_sEvent, portMAX_DELAY)){
+            ESP_LOGW(TAG, "Event: %s", stateMachineEventName(s_sEvent));
+
+            s_stateMachineProcessEvent(&s_sEvent);
+        }
+    }
+}
+
+
 esp_err_t stateMachineInit(void) {
     esp_err_t lErr = ESP_OK;
+
+    if(NULL != s_pQueue) {
+        ESP_LOGW(TAG, "State machine already initialized");
+        lErr = ESP_ERR_INVALID_STATE;
+        goto end_sm_init;
+    }
+
     s_pQueue = xQueueCreate(SM_QUEUE_LENGTH, sizeof(StateMachineEvent_t));
 
     if(NULL == s_pQueue) {
@@ -151,8 +201,8 @@ esp_err_t stateMachinePostEvent(StateMachineEventId_t eEventId) {
     }
 
     StateMachineEvent_t sEvent = {
-        .id = eEventId,
-        .data = 0
+        .eId = eEventId,
+        .ulData = 0
     };
 
     if(pdTRUE != xQueueSend(s_pQueue, &sEvent, pdMS_TO_TICKS(20))) {

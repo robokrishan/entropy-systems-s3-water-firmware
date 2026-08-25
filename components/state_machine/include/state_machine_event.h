@@ -20,8 +20,8 @@ typedef enum {
 } StateMachineEventId_t;
 
 typedef struct {
-    StateMachineEventId_t id;
-    uint32_t data;
+    StateMachineEventId_t eId;
+    uint32_t ulData;
 } StateMachineEvent_t;
 
 char* stateMachineEventName(StateMachineEvent_t sEvent);
