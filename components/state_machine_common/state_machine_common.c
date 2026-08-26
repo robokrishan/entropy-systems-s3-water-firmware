@@ -7,9 +7,7 @@ const char* stateMachineEventName(StateMachineEvent_t sEvent) {
         case SM_EVENT_PUMP_ON:              return "SM_EVENT_PUMP_ON";
         case SM_EVENT_PUMP_OFF:             return "SM_EVENT_PUMP_OFF";
         case SM_EVENT_NOZZLE_EXTEND:        return "SM_EVENT_NOZZLE_EXTEND";
-        case SM_EVENT_NOZZLE_EXTEND_FULL:   return "SM_EVENT_NOZZLE_EXTEND_FULL";
         case SM_EVENT_NOZZLE_RETRACT:       return "SM_EVENT_NOZZLE_RETRACT";
-        case SM_EVENT_NOZZLE_RETRACT_FULL:  return "SM_EVENT_NOZZLE_RETRACT_FULL";
         case SM_EVENT_STOP_SPOOL:           return "SM_EVENT_STOP_SPOOL";
         case SM_EVENT_UPPER_LIMIT_ACTIVE:   return "SM_EVENT_UPPER_LIMIT_ACTIVE";
         case SM_EVENT_UPPER_LIMIT_RELEASED: return "SM_EVENT_UPPER_LIMIT_RELEASED";

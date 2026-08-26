@@ -2,12 +2,29 @@
 #include "esp_log.h"
 #include "state_machine.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "tests.h"
+
 const char* TAG = "main";
+
+
 
 void app_main(void) {
 
-    ESP_LOGI(TAG, "Hello there! ESP32-S3 Super Mini booted!");
+    ESP_LOGI(TAG, "Starting state machine test");
+    
+    esp_err_t lErr = ESP_OK;
 
-    stateMachineInit();
+    lErr = stateMachineInit();
+    if(ESP_OK != lErr) {
+        ESP_LOGE(TAG, "Failed to init state machine! Code: 0x%X", lErr);
+        return;
+    }
+
+    testNormalSequence();
+    testWrongSequence();
+
+    ESP_LOGI(TAG, "END TEST");
     
 }
