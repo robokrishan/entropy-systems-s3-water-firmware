@@ -1,2 +1,3 @@
-idf_component_register(SRCS "state_machine_state.c" "state_machine_event.c" "state_machine.c"
-                    INCLUDE_DIRS "include")
+idf_component_register(SRCS "state_machine.c"
+                    INCLUDE_DIRS "include"
+                    PRIV_REQUIRES state_machine_common state_machine_states)

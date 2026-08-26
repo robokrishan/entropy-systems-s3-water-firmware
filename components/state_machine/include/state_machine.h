@@ -2,8 +2,7 @@
 #define COMPONENTS_STATE_MACHINE_H_
 
 #include "esp_err.h"
-#include "state_machine_event.h"
-#include "state_machine_state.h"
+#include "state_machine_common.h"
 
 esp_err_t stateMachineInit(void);
 
