@@ -3,17 +3,34 @@
 
 #include "esp_err.h"
 
-#define NOZZLE_SERVO_STOP_US      1500
-#define NOZZLE_SERVO_EXTEND_US    1800
-#define NOZZLE_SERVO_RETRACT_US   1200
 
-
+/*
+    * @brief Initialize the nozzle servo
+    *
+    * @return ESP_OK on success, or an error code on failure
+*/
 esp_err_t nozzleServoInit(void);
 
+
+/*
+    * @brief Extend the nozzle servo
+    *
+    * @return ESP_OK on success, or an error code on failure
+*/
 esp_err_t nozzleServoExtend(void);
 
+/*
+    * @brief Retract the nozzle servo
+    *
+    * @return ESP_OK on success, or an error code on failure
+*/
 esp_err_t nozzleServoRetract(void);
 
+/*
+    * @brief Stop the nozzle servo
+    *
+    * @return ESP_OK on success, or an error code on failure
+*/
 esp_err_t nozzleServoStop(void);
 
 
