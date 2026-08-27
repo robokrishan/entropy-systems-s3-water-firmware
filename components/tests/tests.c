@@ -205,3 +205,38 @@ void testNozzleServoSequence(void) {
 
     ESP_LOGI(TAG, "Nozzle servo test complete");
 }
+
+
+void testNozzlServoNeutral(void) {
+    esp_err_t lErr = ESP_OK;
+
+    ESP_LOGI(TAG, "Starting nozzle servo test");
+
+    lErr = nozzleServoInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init nozzle servo! Code: 0x%X", lErr);
+        return;
+    }
+
+    ESP_LOGW(TAG, "Initialized");
+
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    ESP_LOGW(TAG, "Stopping");
+
+    lErr = nozzleServoStop();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to stop servo! Code: 0x%X", lErr);
+        return;
+    }
+
+    ESP_LOGW(TAG, "Servo should not move or jitter!");
+
+    vTaskDelay(pdMS_TO_TICKS(30000));
+
+    nozzleServoDeinit();
+
+    ESP_LOGW(TAG, "De-initialized");
+
+    ESP_LOGI(TAG, "Nozzle servo test complete");
+}

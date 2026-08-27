@@ -8,4 +8,6 @@ void testWrongSequence(void);
 
 void testNozzleServoSequence(void);
 
+void testNozzlServoNeutral(void);
+
 #endif /* COMPONENTS_TESTS_H_ */
