@@ -11,6 +11,12 @@
 */
 esp_err_t nozzleServoInit(void);
 
+/*
+    * @brief De-initialize the nozzle servo
+    *
+    * @return void
+*/
+void nozzleServoDeinit(void);
 
 /*
     * @brief Extend the nozzle servo

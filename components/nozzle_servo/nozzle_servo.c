@@ -48,22 +48,41 @@ end_set_pulse_width:
 
 
 static void s_cleanup(void) {
-    if(NULL != s_pGenerator) {
+    if (NULL != s_pGenerator) {
+        mcpwm_generator_set_force_level(
+            s_pGenerator,
+            0,
+            true
+        );
+    }
+
+    if (NULL != s_pTimer) {
+        mcpwm_timer_start_stop(
+            s_pTimer,
+            MCPWM_TIMER_STOP_EMPTY
+        );
+
+        mcpwm_timer_disable(
+            s_pTimer
+        );
+    }
+
+    if (NULL != s_pGenerator) {
         mcpwm_del_generator(s_pGenerator);
         s_pGenerator = NULL;
     }
 
-    if(NULL != s_pComparator) {
+    if (NULL != s_pComparator) {
         mcpwm_del_comparator(s_pComparator);
         s_pComparator = NULL;
     }
 
-    if(NULL != s_pOperator) {
+    if (NULL != s_pOperator) {
         mcpwm_del_operator(s_pOperator);
         s_pOperator = NULL;
     }
 
-    if(NULL != s_pTimer) {
+    if (NULL != s_pTimer) {
         mcpwm_del_timer(s_pTimer);
         s_pTimer = NULL;
     }
@@ -207,6 +226,10 @@ end_init:
     return lErr;
 }
 
+
+void nozzleServoDeinit(void) {
+    s_cleanup();
+}
 
 esp_err_t nozzleServoExtend(void) {
     esp_err_t lErr = ESP_OK;
