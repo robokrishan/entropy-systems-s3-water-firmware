@@ -22,8 +22,10 @@ void app_main(void) {
         return;
     }
 
-    testNormalSequence();
-    testWrongSequence();
+    // testNormalSequence();
+    // testWrongSequence();
+
+    testNozzleServoSequence();
 
     ESP_LOGI(TAG, "END TEST");
     

@@ -6,4 +6,6 @@ void testNormalSequence(void);
 
 void testWrongSequence(void);
 
+void testNozzleServoSequence(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

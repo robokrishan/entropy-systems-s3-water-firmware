@@ -3,12 +3,15 @@
 #include "esp_log.h"
 #include "state_machine_common.h"
 #include "state_machine.h"
+#include "nozzle_servo.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 static const char* TAG = "TEST";
 
+
+/* State Machine Test */
 static void s_postTestEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs) {
     StateMachineEvent_t temp = {
         .eId = eEvent,
@@ -141,4 +144,64 @@ void testWrongSequence(void)
      * FAULT -> POSITION_UNKNOWN
      */
     s_postTestEvent(SM_EVENT_RESET, 1000);
+}
+
+
+/* Nozzle Servo Test */
+void testNozzleServoSequence(void) {
+    esp_err_t lErr = ESP_OK;
+
+    ESP_LOGI(TAG, "Starting nozzle servo test");
+
+    lErr = nozzleServoInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init nozzle servo! Code: 0x%X", lErr);
+        return;
+    }
+
+    ESP_LOGW(TAG, "Initialized");
+
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    ESP_LOGW(TAG, "Extending");
+
+    lErr = nozzleServoExtend();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to extend servo! Code: 0x%X", lErr);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    ESP_LOGW(TAG, "Stopping");
+
+    lErr = nozzleServoStop();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to stop servo! Code: 0x%X", lErr);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    ESP_LOGW(TAG, "Retracting");
+
+    lErr = nozzleServoRetract();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to retract servo! Code: 0x%X", lErr);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    ESP_LOGW(TAG, "Stopping");
+
+    lErr = nozzleServoStop();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to stop servo! Code: 0x%X", lErr);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    nozzleServoDeinit();
+
+    ESP_LOGW(TAG, "De-initialized");
+
+    ESP_LOGI(TAG, "Nozzle servo test complete");
 }
