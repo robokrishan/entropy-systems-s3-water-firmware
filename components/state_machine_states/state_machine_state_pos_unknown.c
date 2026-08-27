@@ -5,10 +5,7 @@
 static const char *TAG = "SM_POS_UNKNOWN";
 
 
-StateMachineState_t statePositionUnknownProcessEvent(
-    const StateMachineEvent_t *pEvent
-)
-{
+StateMachineStateId_t statePositionUnknownProcessEvent(StateMachineEvent_t *pEvent) {
     switch (pEvent->eId) {
 
         case SM_EVENT_NOZZLE_EXTEND:

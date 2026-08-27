@@ -5,10 +5,7 @@
 static const char *TAG = "SM_DEPLOYED";
 
 
-StateMachineState_t stateDeployedProcessEvent(
-    const StateMachineEvent_t *pEvent
-)
-{
+StateMachineStateId_t stateDeployedProcessEvent(const StateMachineEvent_t *pEvent) {
     switch (pEvent->eId) {
 
         case SM_EVENT_PUMP_ON:

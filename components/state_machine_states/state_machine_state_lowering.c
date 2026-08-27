@@ -5,10 +5,7 @@
 static const char *TAG = "SM_LOWERING";
 
 
-StateMachineState_t stateLoweringProcessEvent(
-    const StateMachineEvent_t *pEvent
-)
-{
+StateMachineStateId_t stateLoweringProcessEvent(const StateMachineEvent_t *pEvent) {
     switch (pEvent->eId) {
 
         case SM_EVENT_LOWER_LIMIT_ACTIVE:

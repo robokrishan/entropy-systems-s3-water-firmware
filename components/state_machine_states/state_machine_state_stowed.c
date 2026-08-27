@@ -6,7 +6,7 @@
 static const char *TAG = "SM_STOWED";
 
 
-StateMachineState_t stateStowedProcessEvent(
+StateMachineStateId_t stateStowedProcessEvent(
     const StateMachineEvent_t *pEvent
 )
 {

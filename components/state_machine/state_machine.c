@@ -1,13 +1,5 @@
 #include "state_machine.h"
 #include "state_machine_common.h"
-#include "state_machine_state_init.h"
-#include "state_machine_state_stowed.h"
-#include "state_machine_state_lowering.h"
-#include "state_machine_state_deployed.h"
-#include "state_machine_state_pumping.h"
-#include "state_machine_state_raising.h"
-#include "state_machine_state_pos_unknown.h"
-#include "state_machine_state_fault.h"
 
 #include "esp_log.h"
 
@@ -24,92 +16,78 @@
 static const char *TAG = "SM";
 
 
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
-
-typedef StateMachineState_t (*StateHandler_t)(
-    const StateMachineEvent_t *pEvent
-);
-
-
-/* -------------------------------------------------------------------------- */
-/* Static variables                                                           */
-/* -------------------------------------------------------------------------- */
-
+/* Static Variables */
 static QueueHandle_t s_pQueue = NULL;
-
-static StateMachineState_t s_eCurrentState = STATE_MACHINE_INIT;
-
-
-/*
- * Maps each state to the function responsible for processing events
- * while the state machine is in that state.
- */
-static const StateHandler_t s_pStateHandlers[] = {
-    [STATE_MACHINE_INIT] = stateInitProcessEvent,
-    [STATE_MACHINE_STOWED] = stateStowedProcessEvent,
-    [STATE_MACHINE_LOWERING] = stateLoweringProcessEvent,
-    [STATE_MACHINE_DEPLOYED] = stateDeployedProcessEvent,
-    [STATE_MACHINE_PUMPING] = statePumpingProcessEvent,
-    [STATE_MACHINE_RAISING] = stateRaisingProcessEvent,
-    [STATE_MACHINE_POSITION_UNKNOWN] = statePositionUnknownProcessEvent,
-    [STATE_MACHINE_FAULT] = stateFaultProcessEvent
-};
+static StateMachineStateId_t s_eCurrentState = STATE_MACHINE_STATE_MAX;
+static StateMachineStateId_t s_ePrevState = STATE_MACHINE_STATE_MAX;
+static StateMachineState_t* s_pStates[STATE_MACHINE_STATE_MAX] = {0};
 
 
-/* -------------------------------------------------------------------------- */
-/* State transition                                                           */
-/* -------------------------------------------------------------------------- */
-
-static void s_stateMachineTransitionTo(StateMachineState_t eNewState)
-{
-    if (eNewState == s_eCurrentState) {
-        return;
+/* Static Functions */
+static StateMachineState_t* s_getState(StateMachineStateId_t eState) {
+    if((uint32_t)eState < (uint32_t)STATE_MACHINE_STATE_MAX) {
+        return s_pStates[eState];
     }
 
-    ESP_LOGI(
-        TAG,
-        "State transition:\t%s -> %s",
-        StateMachineStateName(s_eCurrentState),
-        StateMachineStateName(eNewState)
-    );
+    return NULL;
+}
 
+
+static esp_err_t s_transitionTo(StateMachineStateId_t eNewState) {
+    esp_err_t lErr = ESP_OK;
+
+    StateMachineState_t* pCurrentState = s_getState(s_eCurrentState);
+    StateMachineState_t* pNextState = s_getState(eNewState);
+
+    if(NULL == pNextState) {
+        ESP_LOGE(TAG, "State %s not registered", stateMachineStateName(eNewState));
+        lErr = ESP_ERR_INVALID_STATE;
+        goto end_transition;
+    }
+
+    if(eNewState == s_eCurrentState) {
+        goto end_transition;
+    }
+
+
+    // Leave current state
+
+    if((NULL != pCurrentState) && (NULL != pCurrentState->cbDeinit)) {
+
+        lErr = pCurrentState->cbDeinit();
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to deinit state %s. Code: 0x%X", stateMachineStateName(s_eCurrentState), lErr);
+
+            goto end_transition;
+        }
+    }
+
+
+    // Change state
+    s_ePrevState = s_eCurrentState;
     s_eCurrentState = eNewState;
 
+    ESP_LOGI(TAG, "%s -> %s", stateMachineStateName(s_ePrevState), stateMachineStateName(s_eCurrentState));
 
-    /*
-     * State entry actions will eventually happen here.
-     *
-     * For now, the state machine only changes its logical state.
-     *
-     * Later examples:
-     *
-     * STATE_MACHINE_STOWED:
-     *      spoolStop();
-     *      pumpOff();
-     *
-     * STATE_MACHINE_LOWERING:
-     *      spoolExtend();
-     *
-     * STATE_MACHINE_DEPLOYED:
-     *      spoolStop();
-     *      pumpOff();
-     *
-     * STATE_MACHINE_PUMPING:
-     *      pumpOn();
-     *
-     * STATE_MACHINE_RAISING:
-     *      spoolRetract();
-     *
-     * STATE_MACHINE_POSITION_UNKNOWN:
-     *      spoolStop();
-     *      pumpOff();
-     *
-     * STATE_MACHINE_FAULT:
-     *      spoolStop();
-     *      pumpOff();
-     */
+
+    // Enter new state
+
+    if(NULL != pNextState->cbInit) {
+
+        lErr = pNextState->cbInit();
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to init state %s. Code: 0x%X", stateMachineStateName(eNewState), lErr);
+
+            // TODO: transition to fault/error state on state callback failure
+
+            goto end_transition;
+        }
+    }
+    
+
+end_transition:
+
+    return lErr;
 }
 
 
@@ -117,61 +95,52 @@ static void s_stateMachineTransitionTo(StateMachineState_t eNewState)
 /* Event processing                                                           */
 /* -------------------------------------------------------------------------- */
 
-static void s_stateMachineProcessEvent(
-    const StateMachineEvent_t *pEvent
-)
-{
-    /*
-     * A fault can occur from any state.
-     *
-     * This is deliberately handled before dispatching the event
-     * to an individual state handler.
-     */
-    if (SM_EVENT_FAULT == pEvent->eId) {
-        s_stateMachineTransitionTo(STATE_MACHINE_FAULT);
+static void s_processEvent(StateMachineEvent_t *pEvent) {
+
+    // check null argument
+    if(NULL == pEvent) {
+        ESP_LOGE(TAG, "Invalid event pointer");
         return;
     }
 
+    StateMachineState_t* pState = s_getState(s_eCurrentState);
 
-    /*
-     * Make sure the current state has a valid handler.
-     */
-    if (s_eCurrentState >= (sizeof(s_pStateHandlers) / sizeof(s_pStateHandlers[0]))) {
-        ESP_LOGE(TAG, "Invalid state index: %d", s_eCurrentState);
-        s_stateMachineTransitionTo(STATE_MACHINE_FAULT);
+    // check if current state and its callbacks are valid
+    if(NULL == pState) {
+        ESP_LOGE(TAG, "Current state %s not registered", stateMachineStateName(s_eCurrentState));
         return;
     }
 
-
-    StateHandler_t pHandler = s_pStateHandlers[s_eCurrentState];
-
-
-    if (NULL == pHandler) {
-
-        ESP_LOGE(TAG, "No handler registered for state %s", 
-            StateMachineStateName(s_eCurrentState)
-        );
-
-        s_stateMachineTransitionTo(STATE_MACHINE_FAULT);
-
+    if(NULL == pState->cbProcess) {
+        ESP_LOGE(TAG, "State %s has no process callback", stateMachineStateName(s_eCurrentState));
         return;
     }
 
+    if(NULL == pState->cbNextState) {
+        ESP_LOGE(TAG, "%s has no next-state callback", stateMachineStateName(s_eCurrentState));
+        return;
+    }
 
-    /*
-     * Ask the current state's handler what the next state should be.
-     *
-     * The handler itself does not modify s_eCurrentState.
-     */
-    StateMachineState_t eNextState = pHandler(pEvent);
+    // Process the event
+    pState->cbProcess(pEvent);
 
 
-    /*
-     * If the handler requested a different state, perform the
-     * transition here.
-     */
-    if (eNextState != s_eCurrentState) {
-        s_stateMachineTransitionTo(eNextState);
+    // Determine the next state
+    StateMachineStateId_t eNextState = pState->cbNextState(pEvent);
+
+
+    // Transition to the next state if it's different from the current state
+    if(eNextState != s_eCurrentState) {
+        StateMachineStateId_t eOldState = s_eCurrentState;
+
+        esp_err_t lErr = s_transitionTo(eNextState);
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to transition from %s to %s. Code: 0x%X",
+                stateMachineStateName(eOldState),
+                stateMachineStateName(eNextState),
+                lErr
+            );
+        }
     }
 }
 
@@ -180,14 +149,15 @@ static void s_stateMachineProcessEvent(
 /* State machine task                                                         */
 /* -------------------------------------------------------------------------- */
 
-static void s_pTask(void *arg) {
+static void s_pTask(void *pArg) {
+    (void)pArg;
+
     StateMachineEvent_t sEvent;
 
-    while (true) {
-        if (pdTRUE == xQueueReceive(s_pQueue, &sEvent, portMAX_DELAY)) {
-            ESP_LOGI(TAG, "Event: %s", stateMachineEventName(sEvent));
-
-            s_stateMachineProcessEvent(&sEvent);
+    while(true) {
+        if(pdTRUE == xQueueReceive(s_pQueue, &sEvent, portMAX_DELAY)) {
+            ESP_LOGI(TAG, "Event:\t%s", stateMachineEventName(sEvent));
+            s_processEvent(&sEvent);
         }
     }
 }
@@ -200,6 +170,7 @@ static void s_pTask(void *arg) {
 esp_err_t stateMachineInit(void) {
     esp_err_t lErr = ESP_OK;
 
+    // check if event queue already exists
     if (NULL != s_pQueue) {
         ESP_LOGW(TAG, "State machine already initialized");
         lErr = ESP_ERR_INVALID_STATE;
@@ -207,6 +178,19 @@ esp_err_t stateMachineInit(void) {
         goto end_sm_init;
     }
 
+    // get initial state
+    StateMachineState_t* pInitState = s_getState(s_eCurrentState);
+
+
+    // check if initial state is registered
+    if(NULL == pInitState) {
+        ESP_LOGE(TAG, "No initial state registered");
+        lErr = ESP_ERR_INVALID_STATE;
+        goto end_sm_init;
+    }
+
+
+    // create event queue
     s_pQueue = xQueueCreate(SM_QUEUE_LENGTH, sizeof(StateMachineEvent_t));
 
     if (NULL == s_pQueue) {
@@ -218,6 +202,22 @@ esp_err_t stateMachineInit(void) {
 
     ESP_LOGI(TAG, "Event queue initialized");
 
+
+    // enter initial state
+    if(NULL != pInitState->cbInit) {
+        lErr = pInitState->cbInit();
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to initialize init state %s. Code: 0x%X",
+                stateMachineStateName(s_eCurrentState), 
+                lErr
+            );
+
+            goto cleanup_queue;
+        }
+    }
+
+
+    // create state machine task
     BaseType_t ubResult = xTaskCreate(
         s_pTask,
         "SM",
@@ -229,20 +229,106 @@ esp_err_t stateMachineInit(void) {
 
     if (pdPASS != ubResult) {
         ESP_LOGE(TAG, "Failed to create state machine task");
-        vQueueDelete(s_pQueue);
-        s_pQueue = NULL;
+
         lErr = ESP_ERR_NO_MEM;
 
-        goto end_sm_init;
+        goto cleanup_state;
     }
 
     ESP_LOGI(TAG, "State machine initialized in state %s", 
-        StateMachineStateName(s_eCurrentState)
+        stateMachineStateName(s_eCurrentState)
     );
+
+    goto end_sm_init;
+
+cleanup_state:
+
+    if(NULL != pInitState->cbDeinit) {
+        pInitState->cbDeinit();
+    }
+
+cleanup_queue:
+
+    vQueueDelete(s_pQueue);
+    s_pQueue = NULL;
 
 end_sm_init:
 
     return lErr;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* State registration                                                         */
+/* -------------------------------------------------------------------------- */
+
+esp_err_t stateMachineRegisterState(StateMachineState_t* pState, bool isInitialState) {
+    esp_err_t lErr = ESP_OK;
+
+    if(NULL != s_pQueue) {
+        ESP_LOGE(TAG, "Cannot register state after state machine initialization!");
+
+        lErr = ESP_ERR_INVALID_STATE;
+
+        goto end_register_state;
+    }
+
+
+    if((NULL == pState) || ((uint32_t)pState->eState >= (uint32_t)STATE_MACHINE_STATE_MAX)) {
+        lErr = ESP_ERR_INVALID_ARG;
+
+        goto end_register_state;
+    }
+
+
+    if((NULL == pState->cbProcess) || (NULL == pState->cbNextState)) {
+        ESP_LOGE(TAG, "%s has invalid callbacks", stateMachineStateName(pState->eState));
+
+        lErr = ESP_ERR_INVALID_ARG;
+
+        goto end_register_state;
+    }
+
+    if(NULL != s_pStates[pState->eState]) {
+        ESP_LOGE(TAG, "%s already registered", stateMachineStateName(pState->eState));
+
+        lErr = ESP_ERR_INVALID_STATE;
+
+        goto end_register_state;
+    }
+
+    // Already registered initial state
+    if(isInitialState && (STATE_MACHINE_STATE_MAX != s_eCurrentState)) {
+        ESP_LOGE(TAG, "Initial state already registered!");
+
+        lErr = ESP_ERR_INVALID_STATE;
+
+        goto end_register_state;
+    }
+
+    // register the state
+    s_pStates[pState->eState] = pState;
+
+    // register as initial state if indicated
+    if(isInitialState) {
+        s_eCurrentState = pState->eState;
+    }
+
+    ESP_LOGI(TAG, "Registered %s%s", stateMachineStateName(pState->eState), isInitialState ? " [init] " : "");
+
+end_register_state:
+
+    return lErr;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Current state                                                              */
+/* -------------------------------------------------------------------------- */
+
+StateMachineStateId_t stateMachineCurrentState(void)
+{
+    return s_eCurrentState;
 }
 
 
@@ -276,3 +362,4 @@ end_post_event:
 
     return lErr;
 }
+

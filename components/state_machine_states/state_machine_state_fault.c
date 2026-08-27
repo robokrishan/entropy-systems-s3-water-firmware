@@ -5,10 +5,7 @@
 static const char *TAG = "SM_FAULT";
 
 
-StateMachineState_t stateFaultProcessEvent(
-    const StateMachineEvent_t *pEvent
-)
-{
+StateMachineStateId_t stateFaultProcessEvent(const StateMachineEvent_t *pEvent) {
     switch (pEvent->eId) {
 
         case SM_EVENT_RESET:

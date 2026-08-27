@@ -5,7 +5,7 @@
 static const char *TAG = "SM_RAISING";
 
 
-StateMachineState_t stateRaisingProcessEvent(
+StateMachineStateId_t stateRaisingProcessEvent(
     const StateMachineEvent_t *pEvent
 )
 {

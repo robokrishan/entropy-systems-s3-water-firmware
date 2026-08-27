@@ -3,6 +3,6 @@
 
 #include "state_machine_common.h"
 
-StateMachineState_t statePositionUnknownProcessEvent(const StateMachineEvent_t *pEvent);
+StateMachineStateId_t statePositionUnknownProcessEvent(const StateMachineEvent_t *pEvent);
 
 #endif /* COMPONENTS_STATE_MACHINE_STATE_POS_UNKNOWN_H_ */

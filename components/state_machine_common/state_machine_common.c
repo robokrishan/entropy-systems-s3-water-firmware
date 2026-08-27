@@ -21,7 +21,7 @@ const char* stateMachineEventName(StateMachineEvent_t sEvent) {
     }
 }
 
-const char* StateMachineStateName(StateMachineState_t eState) {
+const char* stateMachineStateName(StateMachineStateId_t eState) {
     switch(eState) {
         case STATE_MACHINE_INIT:                return "STATE_MACHINE_INIT";
         case STATE_MACHINE_STOWED:              return "STATE_MACHINE_STOWED";

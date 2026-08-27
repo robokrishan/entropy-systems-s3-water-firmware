@@ -5,7 +5,7 @@
 static const char *TAG = "SM_PUMPING";
 
 
-StateMachineState_t statePumpingProcessEvent(
+StateMachineStateId_t statePumpingProcessEvent(
     const StateMachineEvent_t *pEvent
 )
 {
