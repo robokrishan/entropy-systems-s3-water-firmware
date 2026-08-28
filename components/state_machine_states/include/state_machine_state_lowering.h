@@ -3,6 +3,6 @@
 
 #include "state_machine_common.h"
 
-StateMachineState_t stateLoweringProcessEvent(const StateMachineEvent_t *pEvent);
+extern StateMachineState_t g_stateMachineStateLowering;
 
 #endif /* COMPONENTS_STATE_MACHINE_STATE_LOWERING_H_ */
