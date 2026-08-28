@@ -1,7 +1,6 @@
-#include "state_machine_common.h"
+#include "state_machine_state_lowering.h"
 #include "nozzle_servo.h"
 #include "esp_log.h"
-#include "esp_err.h"
 
 static const char *TAG = "SM_LOWERING";
 
@@ -25,7 +24,7 @@ static esp_err_t s_stateDeinit(void) {
     
     lErr = nozzleServoStop();
     if(lErr) {
-        ESP_LOGE(TAG, "Failed to init state. Code: 0x%X", lErr);
+        ESP_LOGE(TAG, "Failed to deinit state. Code: 0x%X", lErr);
     }
 
     return lErr;
@@ -59,7 +58,7 @@ static void s_stateProcess(StateMachineEvent_t *pEvent) {
             /*
              * This is expected shortly after beginning
              * movement if the nozzle initially started
-             * at the lower limit.
+             * at the upper limit.
              *
              * No state transition is required.
              */
