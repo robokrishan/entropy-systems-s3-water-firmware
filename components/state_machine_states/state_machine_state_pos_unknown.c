@@ -1,5 +1,4 @@
-#include "state_machine_common.h"
-
+#include "state_machine_state_pos_unknown.h"
 #include "esp_log.h"
 
 static const char *TAG = "SM_POS_UNKNOWN";
