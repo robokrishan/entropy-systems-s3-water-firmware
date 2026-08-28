@@ -12,6 +12,19 @@ static const char* TAG = "TEST";
 
 
 /* State Machine Test */
+static void s_checkState(StateMachineStateId_t eExpectedState) {
+    StateMachineStateId_t eActualState = stateMachineGetCurrentState();
+
+    if(eActualState != eExpectedState) {
+        ESP_LOGE(TAG, "State check failed. Expected %s. Got %s",
+            stateMachineStateName(eExpectedState),
+            stateMachineStateName(eActualState)
+        );
+    } else {
+        ESP_LOGI(TAG, "State check passed");
+    }
+}
+
 static void s_postTestEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs) {
     StateMachineEvent_t temp = {
         .eId = eEvent,
@@ -31,14 +44,29 @@ static void s_postTestEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs) {
 }
 
 void testNormalSequence(void) {
-    s_postTestEvent(SM_EVENT_SYSTEM_READY, 1000);
-    s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 1000);
-    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 1000);
-    s_postTestEvent(SM_EVENT_LOWER_LIMIT_ACTIVE, 1000);
-    s_postTestEvent(SM_EVENT_PUMP_ON, 1000);
-    s_postTestEvent(SM_EVENT_PUMP_OFF, 1000);
-    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 1000);
-    s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 1000);
+    s_postTestEvent(SM_EVENT_SYSTEM_READY, 3000);
+    s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+    s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 3000);
+    s_checkState(STATE_MACHINE_STOWED);
+
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 3000);
+    s_checkState(STATE_MACHINE_LOWERING);
+
+    s_postTestEvent(SM_EVENT_LOWER_LIMIT_ACTIVE, 3000);
+    s_checkState(STATE_MACHINE_DEPLOYED);
+
+    s_postTestEvent(SM_EVENT_PUMP_ON, 3000);
+    s_checkState(STATE_MACHINE_PUMPING);
+
+    s_postTestEvent(SM_EVENT_PUMP_OFF, 3000);
+    s_checkState(STATE_MACHINE_DEPLOYED);
+
+    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 3000);
+    s_checkState(STATE_MACHINE_RAISING);
+
+    s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 3000);
+    s_checkState(STATE_MACHINE_STOWED);
 }
 
 void testWrongSequence(void)
@@ -152,6 +180,8 @@ void testNozzleServoSequence(void) {
     esp_err_t lErr = ESP_OK;
 
     ESP_LOGI(TAG, "Starting nozzle servo test");
+
+    nozzleServoDeinit();
 
     lErr = nozzleServoInit();
     if(lErr) {
