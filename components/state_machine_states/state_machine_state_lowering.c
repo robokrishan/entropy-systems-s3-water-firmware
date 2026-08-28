@@ -55,7 +55,7 @@ static void s_stateProcess(StateMachineEvent_t *pEvent) {
             break;
 
 
-        case SM_EVENT_LOWER_LIMIT_RELEASED:
+        case SM_EVENT_UPPER_LIMIT_RELEASED:
             /*
              * This is expected shortly after beginning
              * movement if the nozzle initially started
