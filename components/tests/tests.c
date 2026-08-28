@@ -25,6 +25,7 @@ static void s_checkState(StateMachineStateId_t eExpectedState) {
     }
 }
 
+
 static void s_postTestEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs) {
     StateMachineEvent_t temp = {
         .eId = eEvent,
@@ -42,6 +43,7 @@ static void s_postTestEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs) {
 
     vTaskDelay(pdMS_TO_TICKS(ulDelayMs));
 }
+
 
 void testNormalSequence(void) {
     s_postTestEvent(SM_EVENT_SYSTEM_READY, 3000);
@@ -68,6 +70,7 @@ void testNormalSequence(void) {
     s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 3000);
     s_checkState(STATE_MACHINE_STOWED);
 }
+
 
 void testWrongSequence(void)
 {
@@ -174,6 +177,7 @@ void testWrongSequence(void)
     s_postTestEvent(SM_EVENT_RESET, 1000);
 }
 
+
 void testFaultSequence(void) {
     /* Get into a known STOWED state first */
     s_postTestEvent(SM_EVENT_SYSTEM_READY, 2000);
@@ -205,7 +209,7 @@ void testFaultSequence(void) {
     s_postTestEvent(SM_EVENT_RESET, 500);
     s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
 
-    
+
     /* Verify normal operation can resume*/
     s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 5000);
     s_checkState(STATE_MACHINE_LOWERING);
