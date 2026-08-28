@@ -1,4 +1,5 @@
 #include "state_machine_state_deployed.h"
+#include "state_machine_global_events.h"
 #include "nozzle_servo.h"
 #include "esp_log.h"
 
