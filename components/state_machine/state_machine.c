@@ -326,7 +326,7 @@ end_register_state:
 /* Current state                                                              */
 /* -------------------------------------------------------------------------- */
 
-StateMachineStateId_t stateMachineCurrentState(void)
+StateMachineStateId_t stateMachineGetCurrentState(void)
 {
     return s_eCurrentState;
 }
