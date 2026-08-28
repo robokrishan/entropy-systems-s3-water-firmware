@@ -1,4 +1,5 @@
 #include "state_machine_state_pumping.h"
+#include "state_machine_global_events.h"
 // include pump component when implemented
 #include "esp_log.h"
 
@@ -27,6 +28,12 @@ static esp_err_t s_stateDeinit(void) {
 
 /* event processing */
 static void s_stateProcess(StateMachineEvent_t *pEvent) {
+
+    // global fault event handling
+    if(isGlobalEventProcess(pEvent)) {
+        return;
+    }
+
     switch (pEvent->eId) {
 
         case SM_EVENT_PUMP_OFF:
@@ -69,6 +76,13 @@ static void s_stateProcess(StateMachineEvent_t *pEvent) {
 
 /* next state */
 static StateMachineStateId_t s_stateNextState(const StateMachineEvent_t* pEvent) {
+
+    // global fault event handling
+    StateMachineStateId_t eNextState;
+    if(stateMachineGlobalEventGetNextState(pEvent, &eNextState)) {
+        return eNextState;
+    }
+    
     switch(pEvent->eId) {
         case SM_EVENT_PUMP_OFF:
         case SM_EVENT_RC_SIGNAL_LOST:
