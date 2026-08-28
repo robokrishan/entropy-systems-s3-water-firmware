@@ -1,11 +1,38 @@
-#include "state_machine_common.h"
-
+#include "state_machine_state_fault.h"
+#include "nozzle_servo.h"
 #include "esp_log.h"
+
 
 static const char *TAG = "SM_FAULT";
 
 
-StateMachineStateId_t stateFaultProcessEvent(const StateMachineEvent_t *pEvent) {
+/* state initialization */
+static esp_err_t s_stateInit(void) {
+    esp_err_t lErr = ESP_OK;
+
+    /* put all actuators in safe mode */
+    lErr = nozzleServoStop();
+    if(lErr) {
+        ESP_LOGE(TAG, "failed to init state. Code: 0x%X", lErr);
+        return lErr;
+    }
+
+    /* TODO: Ensure pump is also off when driver implemented */
+
+    return ESP_OK;
+}
+
+
+/* state deinitialization */
+static esp_err_t s_stateDeinit(void) {
+    
+
+    return ESP_OK;
+}
+
+
+/* event processing */
+static void s_stateProcess(StateMachineEvent_t* pEvent) {
     switch (pEvent->eId) {
 
         case SM_EVENT_RESET:
@@ -16,14 +43,44 @@ StateMachineStateId_t stateFaultProcessEvent(const StateMachineEvent_t *pEvent) 
              * The system must re-establish its position
              * using one of the limit switches.
              */
-            ESP_LOGI(TAG,"Fault reset requested. Nozzle position must be re-established");
+            ESP_LOG_EVENT(*pEvent);
+            break;
 
-            return STATE_MACHINE_POSITION_UNKNOWN;
+
+        case SM_EVENT_FAULT:
+            /*
+                already in fault state, remain in FAULT
+            */
+            ESP_LOG_EVENT(*pEvent);
+            break;
 
 
         default:
-            ESP_LOGW(TAG, "Event %s ignored while in FAULT", stateMachineEventName(*pEvent));
+            ESP_LOGW(TAG, "Event %s ignored while in FAULT", 
+                stateMachineEventName(*pEvent));
+            
+            break;
+    }
+}
 
+
+/* next state */
+static StateMachineStateId_t s_stateNextState(const StateMachineEvent_t* pEvent) {
+    switch(pEvent->eId) {
+        case SM_EVENT_RESET:
+            return STATE_MACHINE_POSITION_UNKNOWN;
+
+        default:
             return STATE_MACHINE_FAULT;
     }
 }
+
+
+/* state definition */
+StateMachineState_t g_stateMachineStateFault = {
+    .eState = STATE_MACHINE_FAULT,
+    .cbInit = s_stateInit,
+    .cbDeinit = s_stateDeinit,
+    .cbProcess = s_stateProcess,
+    .cbNextState = s_stateNextState
+};

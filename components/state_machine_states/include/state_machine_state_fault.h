@@ -3,6 +3,6 @@
 
 #include "state_machine_common.h"
 
-StateMachineState_t stateFaultProcessEvent(const StateMachineEvent_t *pEvent);
+extern StateMachineState_t g_stateMachineStateFault;
 
 #endif /* COMPONENTS_STATE_MACHINE_STATE_FAULT_H_ */
