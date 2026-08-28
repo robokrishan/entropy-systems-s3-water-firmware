@@ -2,6 +2,7 @@
 #include "esp_log.h"
 #include "state_machine.h"
 #include "nozzle_servo.h"
+#include "state_machine_states.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -22,17 +23,23 @@ void app_main(void) {
         return;
     }
 
+    lErr = stateMachineStatesRegister();
+    if(ESP_OK != lErr) {
+        ESP_LOGE(TAG, "Failed to register states! Code: 0x%X", lErr);
+        return;
+    }
+
     lErr = stateMachineInit();
     if(ESP_OK != lErr) {
         ESP_LOGE(TAG, "Failed to init state machine! Code: 0x%X", lErr);
         return;
     }
 
-    // testNormalSequence();
+    testNormalSequence();
     // testWrongSequence();
 
     // testNozzleServoSequence();
-    testNozzlServoNeutral();
+    // testNozzlServoNeutral();
 
     ESP_LOGI(TAG, "END TEST");
     
