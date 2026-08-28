@@ -3,6 +3,6 @@
 
 #include "state_machine_common.h"
 
-StateMachineState_t statePumpingProcessEvent(const StateMachineEvent_t *pEvent);
+extern StateMachineState_t g_stateMachineStatePumping;
 
 #endif /* COMPONENTS_STATE_MACHINE_STATE_PUMPING_H_ */

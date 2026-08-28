@@ -1,24 +1,37 @@
 #include "state_machine_common.h"
-
+// include pump component when implemented
 #include "esp_log.h"
 
 static const char *TAG = "SM_PUMPING";
 
 
-StateMachineStateId_t statePumpingProcessEvent(
-    const StateMachineEvent_t *pEvent
-)
-{
+/* state initialization */
+static esp_err_t s_stateInit(void) {
+    /*
+        TODO: turn on pump once driver implemented
+    */
+
+    return ESP_OK;
+}
+
+
+/* state deinitialization */
+static esp_err_t s_stateDeinit(void) {
+    /*
+        TODO: turn off pump once driver implemented
+    */
+
+    return ESP_OK;
+}
+
+
+/* event processing */
+static void s_stateProcess(StateMachineEvent_t *pEvent) {
     switch (pEvent->eId) {
 
         case SM_EVENT_PUMP_OFF:
-            ESP_LOGI(
-                TAG,
-                "Stopping pump"
-            );
-
-            return STATE_MACHINE_DEPLOYED;
-
+            ESP_LOG_EVENT(*pEvent);
+            break;
 
         case SM_EVENT_RC_SIGNAL_LOST:
             /*
@@ -29,9 +42,9 @@ StateMachineStateId_t statePumpingProcessEvent(
              * deployed, so return to DEPLOYED rather than
              * POSITION_UNKNOWN.
              */
+            ESP_LOG_EVENT(*pEvent);
             ESP_LOGW(TAG, "RC signal lost. Stopping pump");
-
-            return STATE_MACHINE_DEPLOYED;
+            break;
 
 
         case SM_EVENT_LOWER_LIMIT_ACTIVE:
@@ -40,7 +53,8 @@ StateMachineStateId_t statePumpingProcessEvent(
              * Repeated lower-limit events do not require
              * a state transition.
              */
-            return STATE_MACHINE_PUMPING;
+            ESP_LOG_EVENT(*pEvent);
+            break;
 
 
         default:
@@ -48,6 +62,29 @@ StateMachineStateId_t statePumpingProcessEvent(
                 stateMachineEventName(*pEvent)
             );
 
+            break;
+    }
+}
+
+
+/* next state */
+static StateMachineStateId_t s_stateNextState(const StateMachineEvent_t* pEvent) {
+    switch(pEvent->eId) {
+        case SM_EVENT_PUMP_OFF:
+        case SM_EVENT_RC_SIGNAL_LOST:
+            return STATE_MACHINE_DEPLOYED;
+
+        default:
             return STATE_MACHINE_PUMPING;
     }
 }
+
+
+/* state definition */
+StateMachineState_t g_stateMachineStatePumping = {
+    .eState = STATE_MACHINE_PUMPING,
+    .cbInit = s_stateInit,
+    .cbDeinit = s_stateDeinit,
+    .cbProcess = s_stateProcess,
+    .cbNextState = s_stateNextState
+};
