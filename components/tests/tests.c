@@ -174,6 +174,46 @@ void testWrongSequence(void)
     s_postTestEvent(SM_EVENT_RESET, 1000);
 }
 
+void testFaultSequence(void) {
+    /* Get into a known STOWED state first */
+    s_postTestEvent(SM_EVENT_SYSTEM_READY, 2000);
+    s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 1000);
+
+    /* Start moving */
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 5000);
+    s_checkState(STATE_MACHINE_LOWERING);
+
+    /*
+     * Servo should currently be extending.
+     * FAULT should stop the servo and enter FAULT.
+     */
+    s_postTestEvent(SM_EVENT_FAULT, 500);
+    s_checkState(STATE_MACHINE_FAULT);
+
+    /*
+     * Normal commands should have no effect while faulted.
+     */
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 500);
+    s_checkState(STATE_MACHINE_FAULT);
+    s_postTestEvent(SM_EVENT_PUMP_ON, 500);
+    s_checkState(STATE_MACHINE_FAULT);
+
+    /*
+     * RESET should clear the fault, but physical
+     * nozzle position is no longer known.
+     */
+    s_postTestEvent(SM_EVENT_RESET, 500);
+    s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+    
+    /* Verify normal operation can resume*/
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 5000);
+    s_checkState(STATE_MACHINE_LOWERING);
+
+    s_postTestEvent(SM_EVENT_LOWER_LIMIT_ACTIVE, 2000);
+    s_checkState(STATE_MACHINE_DEPLOYED);
+}
+
 
 /* Nozzle Servo Test */
 void testNozzleServoSequence(void) {
