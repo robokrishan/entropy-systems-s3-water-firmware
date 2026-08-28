@@ -3,6 +3,6 @@
 
 #include "state_machine_common.h"
 
-StateMachineState_t stateStowedProcessEvent(const StateMachineEvent_t *pEvent);
+extern StateMachineState_t g_stateMachineStateStowed;
 
 #endif /* COMPONENTS_STATE_MACHINE_STATE_STOWED_H_ */

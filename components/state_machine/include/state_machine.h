@@ -3,6 +3,7 @@
 
 #include "esp_err.h"
 #include "state_machine_common.h"
+#include "stdbool.h"
 
 
 /*

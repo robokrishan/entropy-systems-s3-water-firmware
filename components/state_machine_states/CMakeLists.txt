@@ -4,4 +4,4 @@ idf_component_register(SRCS "state_machine_state_init.c"
                         "state_machine_state_raising.c" "state_machine_state_pos_unknown.c"
                         "state_machine_state_fault.c"
                     INCLUDE_DIRS "include"
-                    REQUIRES state_machine_common)
+                    REQUIRES state_machine_common nozzle_servo)
