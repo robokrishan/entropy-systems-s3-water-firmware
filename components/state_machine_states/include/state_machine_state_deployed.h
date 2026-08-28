@@ -3,6 +3,6 @@
 
 #include "state_machine_common.h"
 
-StateMachineState_t stateDeployedProcessEvent(const StateMachineEvent_t *pEvent);
+extern StateMachineState_t g_stateMachineStateDeployed;
 
 #endif /* COMPONENTS_STATE_MACHINE_STATE_DEPLOYED_H_ */
