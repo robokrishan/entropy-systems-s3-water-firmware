@@ -5,7 +5,7 @@
 static const char* TAG = "SM_GLOBAL";
 
 
-bool stateMachineGlobalEventProcess(StateMachineEvent_t* pEvent) {
+bool isGlobalEventProcess(StateMachineEvent_t* pEvent) {
     if(NULL == pEvent) {
         ESP_LOGE(TAG, "Invalid event pointer");
         return false;
