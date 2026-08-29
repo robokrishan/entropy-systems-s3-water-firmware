@@ -37,10 +37,12 @@ void app_main(void) {
 
     // testNormalSequence();
     // testWrongSequence();
-    testFaultSequence();
+    // testFaultSequence();
 
     // testNozzleServoSequence();
     // testNozzlServoNeutral();
+    // testStateInitFailure();
+    testStateDeinitFailure();
 
     ESP_LOGI(TAG, "END TEST");
     

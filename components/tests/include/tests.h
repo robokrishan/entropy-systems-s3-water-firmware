@@ -36,4 +36,10 @@ void testNozzleServoSequence(void);
  */
 void testNozzlServoNeutral(void);
 
+
+void testStateInitFailure(void);
+
+
+void testStateDeinitFailure(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

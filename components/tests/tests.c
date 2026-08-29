@@ -12,7 +12,7 @@ static const char* TAG = "TEST";
 
 
 /* State Machine Test */
-static void s_checkState(StateMachineStateId_t eExpectedState) {
+static bool s_checkState(StateMachineStateId_t eExpectedState) {
     StateMachineStateId_t eActualState = stateMachineGetCurrentState();
 
     if(eActualState != eExpectedState) {
@@ -20,8 +20,11 @@ static void s_checkState(StateMachineStateId_t eExpectedState) {
             stateMachineStateName(eExpectedState),
             stateMachineStateName(eActualState)
         );
+        return 0;
+
     } else {
         ESP_LOGI(TAG, "State check passed");
+        return 1;
     }
 }
 
@@ -46,41 +49,56 @@ static void s_postTestEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs) {
 
 
 void testNormalSequence(void) {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 9;
+
+    ubTestPassCount += s_checkState(STATE_MACHINE_INIT);
+
     s_postTestEvent(SM_EVENT_SYSTEM_READY, 3000);
-    s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
 
     s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 3000);
-    s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
 
     s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 3000);
-    s_checkState(STATE_MACHINE_LOWERING);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
 
     s_postTestEvent(SM_EVENT_LOWER_LIMIT_ACTIVE, 3000);
-    s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
 
     s_postTestEvent(SM_EVENT_PUMP_ON, 3000);
-    s_checkState(STATE_MACHINE_PUMPING);
+    ubTestPassCount += s_checkState(STATE_MACHINE_PUMPING);
 
     s_postTestEvent(SM_EVENT_PUMP_OFF, 3000);
-    s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
 
     s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 3000);
-    s_checkState(STATE_MACHINE_RAISING);
+    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
 
     s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 3000);
-    s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+
+    ESP_LOGW(TAG, "Passed %d / %d tests", ubTestPassCount, ubTestCount);
+    ESP_LOGW(TAG, "=== END TEST ===");
 }
 
 
 void testWrongSequence(void)
 {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 15;
+
     /*
      * Establish known starting position.
      *
      * INIT -> POSITION_UNKNOWN -> STOWED
      */
+    ubTestPassCount += s_checkState(STATE_MACHINE_INIT);
     s_postTestEvent(SM_EVENT_SYSTEM_READY, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
     s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
 
 
     /*
@@ -90,12 +108,14 @@ void testWrongSequence(void)
      * Remain in STOWED.
      */
     s_postTestEvent(SM_EVENT_PUMP_ON, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
 
 
     /*
      * STOWED -> LOWERING
      */
     s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
 
 
     /*
@@ -105,6 +125,7 @@ void testWrongSequence(void)
      * Remain in LOWERING.
      */
     s_postTestEvent(SM_EVENT_PUMP_ON, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
 
 
     /*
@@ -116,6 +137,7 @@ void testWrongSequence(void)
      * Must remain in LOWERING.
      */
     s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
 
 
     /*
@@ -124,12 +146,13 @@ void testWrongSequence(void)
      * LOWERING -> POSITION_UNKNOWN
      */
     s_postTestEvent(SM_EVENT_STOP_SPOOL, 1000);
-
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
 
     /*
      * POSITION_UNKNOWN -> RAISING
      */
     s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
 
 
     /*
@@ -141,6 +164,7 @@ void testWrongSequence(void)
      * Must remain in RAISING.
      */
     s_postTestEvent(SM_EVENT_LOWER_LIMIT_ACTIVE, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
 
 
     /*
@@ -149,12 +173,14 @@ void testWrongSequence(void)
      * RAISING -> STOWED
      */
     s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
 
 
     /*
      * STOWED -> LOWERING
      */
     s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
 
 
     /*
@@ -163,59 +189,174 @@ void testWrongSequence(void)
      * LOWERING -> FAULT
      */
     s_postTestEvent(SM_EVENT_FAULT, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
 
 
     /*
      * Must be rejected while in FAULT.
      */
     s_postTestEvent(SM_EVENT_PUMP_ON, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
 
 
     /*
      * FAULT -> POSITION_UNKNOWN
      */
     s_postTestEvent(SM_EVENT_RESET, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+    ESP_LOGW(TAG, "Passed %d / %d tests", ubTestPassCount, ubTestCount);
+    ESP_LOGW(TAG, "=== END TEST ===");
 }
 
 
 void testFaultSequence(void) {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 7;
+
     /* Get into a known STOWED state first */
     s_postTestEvent(SM_EVENT_SYSTEM_READY, 2000);
     s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 1000);
 
     /* Start moving */
     s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 5000);
-    s_checkState(STATE_MACHINE_LOWERING);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
 
     /*
      * Servo should currently be extending.
      * FAULT should stop the servo and enter FAULT.
      */
     s_postTestEvent(SM_EVENT_FAULT, 500);
-    s_checkState(STATE_MACHINE_FAULT);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
 
     /*
      * Normal commands should have no effect while faulted.
      */
     s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 500);
-    s_checkState(STATE_MACHINE_FAULT);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
     s_postTestEvent(SM_EVENT_PUMP_ON, 500);
-    s_checkState(STATE_MACHINE_FAULT);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
 
     /*
      * RESET should clear the fault, but physical
      * nozzle position is no longer known.
      */
     s_postTestEvent(SM_EVENT_RESET, 500);
-    s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     /* Verify normal operation can resume*/
     s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 5000);
-    s_checkState(STATE_MACHINE_LOWERING);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
 
     s_postTestEvent(SM_EVENT_LOWER_LIMIT_ACTIVE, 2000);
-    s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+
+    ESP_LOGW(TAG, "Passed %d / %d tests", ubTestPassCount, ubTestCount);
+    ESP_LOGW(TAG, "=== END TEST ===");
+}
+
+
+void testStateInitFailure(void) {
+    /*
+        Force state_machine_state_lowering.s_stateInit() to
+        return ESP_FAIL, then run this test.
+    */
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 7;
+
+    ESP_LOGW(TAG, "=== TEST: State init failure ===");
+
+    /* INIT -> POSITION_UNKNOWN */
+    s_postTestEvent(SM_EVENT_SYSTEM_READY, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+    /* POSITION_UNKNOWN -> STOWED */
+    s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+
+    /*
+     * STOWED -> LOWERING
+     *
+     * LOWERING.cbInit() is deliberately returning ESP_FAIL,
+     * so the state machine should force itself into FAULT.
+     */
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+
+    /*
+     * Verify FAULT remains latched.
+     */
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+
+    s_postTestEvent(SM_EVENT_PUMP_ON, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+
+    /*
+     * Verify recovery still works.
+     */
+    s_postTestEvent(SM_EVENT_RESET, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
+
+    ESP_LOGW(TAG, "Passed %d / %d tests", ubTestPassCount, ubTestCount);
+    ESP_LOGW(TAG, "=== END TEST ===");
+}
+
+
+void testStateDeinitFailure(void) {
+    /*
+        Force state_machine_state_lowering.s_stateDeinit() to
+        return ESP_FAIL, then run this test.
+    */
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 7;
+    ESP_LOGW(TAG, "=== TEST: State deinit failure ===");
+
+    /* INIT -> POSITION_UNKNOWN */
+    s_postTestEvent(SM_EVENT_SYSTEM_READY, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+    /* POSITION_UNKNOWN -> STOWED */
+    s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+
+    /* STOWED -> LOWERING */
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
+
+    /*
+     * LOWER_LIMIT_ACTIVE normally causes:
+     *
+     * LOWERING -> DEPLOYED
+     *
+     * But LOWERING.cbDeinit() has been deliberately
+     * made to fail. Therefore the state machine
+     * should instead enter FAULT.
+     */
+    s_postTestEvent(SM_EVENT_LOWER_LIMIT_ACTIVE, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+
+    /*
+     * FAULT must remain latched.
+     */
+    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+
+    /*
+     * RESET should recover to POSITION_UNKNOWN.
+     */
+    s_postTestEvent(SM_EVENT_RESET, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
+
+    ESP_LOGW(TAG, "Passed %d / %d tests", ubTestPassCount, ubTestCount);
+    ESP_LOGW(TAG, "=== END TEST ===");
 }
 
 
