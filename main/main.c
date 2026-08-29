@@ -42,7 +42,7 @@ void app_main(void) {
         return;
     }
 
-    // testNormalSequence();
+    testNormalSequence();
     // testWrongSequence();
     // testFaultSequence();
 
@@ -51,7 +51,7 @@ void app_main(void) {
     // testStateInitFailure();
     // testStateDeinitFailure();
     // testHaltSequence();
-    testPumpSequence();
+    // testPumpSequence();
 
     ESP_LOGI(TAG, "END TEST");
     

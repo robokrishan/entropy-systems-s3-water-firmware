@@ -1,5 +1,6 @@
 #include "state_machine_state_fault.h"
 #include "nozzle_servo.h"
+#include "pump.h"
 #include "esp_log.h"
 
 
@@ -14,12 +15,18 @@ static esp_err_t s_stateInit(void) {
     lErr = nozzleServoStop();
     if(lErr) {
         ESP_LOGE(TAG, "failed to init state. Code: 0x%X", lErr);
-        return lErr;
+        goto end_state_init;
     }
 
-    /* TODO: Ensure pump is also off when driver implemented */
+    lErr = pumpOff();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to stop pump. Code: 0x%X", lErr);
+        goto end_state_init;
+    }
 
-    return ESP_OK;
+end_state_init:
+
+    return lErr;
 }
 
 

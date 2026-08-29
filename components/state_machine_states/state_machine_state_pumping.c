@@ -1,6 +1,6 @@
 #include "state_machine_state_pumping.h"
 #include "state_machine_global_events.h"
-// include pump component when implemented
+#include "pump.h"
 #include "esp_log.h"
 
 static const char *TAG = "SM_PUMPING";
@@ -8,21 +8,27 @@ static const char *TAG = "SM_PUMPING";
 
 /* state initialization */
 static esp_err_t s_stateInit(void) {
-    /*
-        TODO: turn on pump once driver implemented
-    */
+    esp_err_t lErr = ESP_OK;
 
-    return ESP_OK;
+    lErr = pumpOn();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init state. Code: 0x%X", lErr);
+    }
+
+    return lErr;
 }
 
 
 /* state deinitialization */
 static esp_err_t s_stateDeinit(void) {
-    /*
-        TODO: turn off pump once driver implemented
-    */
+    esp_err_t lErr = ESP_OK;
 
-    return ESP_OK;
+    lErr = pumpOff();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to deinit state. Code: 0x%X", lErr);
+    }
+
+    return lErr;
 }
 
 
