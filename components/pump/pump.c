@@ -23,13 +23,13 @@ esp_err_t pumpInit(void) {
         goto end_init;
     }
 
-    lErr = gpio_set_level(PIN_PUMP, PUMP_OFF);
+    lErr = gpio_set_level(CONFIG_PIN_PUMP, PUMP_OFF);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to set initial pump level. Code: 0x%X", lErr);
         goto end_init;
     }
 
-    lErr = gpio_set_direction(PIN_PUMP, GPIO_MODE_OUTPUT);
+    lErr = gpio_set_direction(CONFIG_PIN_PUMP, GPIO_MODE_OUTPUT);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to configure pump GPIO. Code: 0x%X", lErr);
         goto end_init;
@@ -37,7 +37,7 @@ esp_err_t pumpInit(void) {
 
     s_isInitialized = true;
 
-    ESP_LOGI(TAG, "Pump initialized on pin %d", PIN_PUMP);
+    ESP_LOGI(TAG, "Pump initialized on pin %d", CONFIG_PIN_PUMP);
 
 end_init:
 
@@ -56,7 +56,7 @@ esp_err_t pumpOn(void) {
         goto end_pump_on;
     }
 
-    lErr = gpio_set_level(PIN_PUMP, PUMP_ON);
+    lErr = gpio_set_level(CONFIG_PIN_PUMP, PUMP_ON);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to power on pump. Code: 0x%X", lErr);
         goto end_pump_on;
@@ -81,7 +81,7 @@ esp_err_t pumpOff(void) {
         goto end_pump_off;
     }
 
-    lErr = gpio_set_level(PIN_PUMP, PUMP_OFF);
+    lErr = gpio_set_level(CONFIG_PIN_PUMP, PUMP_OFF);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to power off pump. Code: 0x%X", lErr);
         goto end_pump_off;

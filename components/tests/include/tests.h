@@ -47,4 +47,8 @@ void testHaltSequence(void);
 
 
 void testPumpSequence(void);
+
+
+void testLimitSwitchSequence(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

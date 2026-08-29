@@ -4,6 +4,7 @@
 #include "nozzle_servo.h"
 #include "state_machine_states.h"
 #include "pump.h"
+#include "limit_switch.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -42,7 +43,16 @@ void app_main(void) {
         return;
     }
 
-    testNormalSequence();
+    lErr = limitSwitchInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init limit switches! Code: 0x%X", lErr);
+        return;
+    }
+
+    stateMachinePostEvent(SM_EVENT_SYSTEM_READY);
+    limitSwitchSyncState();
+
+    // testNormalSequence();
     // testWrongSequence();
     // testFaultSequence();
 
@@ -52,6 +62,7 @@ void app_main(void) {
     // testStateDeinitFailure();
     // testHaltSequence();
     // testPumpSequence();
+    testLimitSwitchSequence();
 
     ESP_LOGI(TAG, "END TEST");
     

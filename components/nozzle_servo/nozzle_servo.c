@@ -149,7 +149,7 @@ esp_err_t nozzleServoInit(void) {
 
     // configure pwm generator
     mcpwm_generator_config_t sGeneratorConfig = {
-        .gen_gpio_num = PIN_NOZZLE_SERVO
+        .gen_gpio_num = CONFIG_PIN_NOZZLE_SERVO
     };
 
     lErr = mcpwm_new_generator(s_pOperator, &sGeneratorConfig, &s_pGenerator);
@@ -215,7 +215,7 @@ esp_err_t nozzleServoInit(void) {
 
     s_isInitialized = true;
 
-    ESP_LOGI(TAG, "Nozzle servo initialized on pin %d", PIN_NOZZLE_SERVO);
+    ESP_LOGI(TAG, "Nozzle servo initialized on pin %d", CONFIG_PIN_NOZZLE_SERVO);
 
 end_init:
 
