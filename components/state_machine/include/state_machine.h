@@ -39,4 +39,7 @@ esp_err_t stateMachinePostEvent(StateMachineEventId_t eEventId);
 */
 StateMachineStateId_t stateMachineGetCurrentState(void);
 
+
+esp_err_t stateMachineSetFailureState(StateMachineStateId_t eState);
+
 #endif /* COMPONENTS_STATE_MACHINE_H_ */

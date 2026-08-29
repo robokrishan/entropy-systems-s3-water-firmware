@@ -20,6 +20,7 @@ static const char *TAG = "SM";
 static QueueHandle_t s_pQueue = NULL;
 static StateMachineStateId_t s_eCurrentState = STATE_MACHINE_STATE_MAX;
 static StateMachineStateId_t s_ePrevState = STATE_MACHINE_STATE_MAX;
+static StateMachineStateId_t s_eFailureState = STATE_MACHINE_STATE_MAX;
 static StateMachineState_t* s_pStates[STATE_MACHINE_STATE_MAX] = {0};
 
 
@@ -30,6 +31,54 @@ static StateMachineState_t* s_getState(StateMachineStateId_t eState) {
     }
 
     return NULL;
+}
+
+
+static esp_err_t s_enterFailureState(void) {
+
+    esp_err_t lErr = ESP_OK;
+
+    if(STATE_MACHINE_STATE_MAX == s_eFailureState) {
+        ESP_LOGE(TAG, "No failure state configured");
+        lErr = ESP_ERR_INVALID_STATE;
+
+        goto end_enter_fail_state;
+    }
+
+    StateMachineState_t* pFailureState = s_getState(s_eFailureState);
+
+    if(NULL == pFailureState) {
+        ESP_LOGE(TAG, "Failure state not registered!");
+        lErr = ESP_ERR_INVALID_STATE;
+
+        goto end_enter_fail_state;
+    }
+
+    if(s_eCurrentState == s_eFailureState) {
+        goto end_enter_fail_state;
+    }
+
+    StateMachineStateId_t eOldState = s_eCurrentState;
+    
+    s_ePrevState = s_eCurrentState;
+    s_eCurrentState = s_eFailureState;
+
+    ESP_LOGE(TAG, "Forced transition: %s -> %s", 
+        stateMachineStateName(eOldState),
+        stateMachineStateName(s_eCurrentState)
+    );
+
+    if(NULL != pFailureState->cbInit) {
+        lErr = pFailureState->cbInit();
+
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to init failure state. Code: 0x%X", lErr);
+        }
+    }
+
+end_enter_fail_state:
+
+    return lErr;
 }
 
 
@@ -56,7 +105,16 @@ static esp_err_t s_transitionTo(StateMachineStateId_t eNewState) {
 
         lErr = pCurrentState->cbDeinit();
         if(lErr) {
-            ESP_LOGE(TAG, "Failed to deinit state %s. Code: 0x%X", stateMachineStateName(s_eCurrentState), lErr);
+            ESP_LOGE(TAG, "Failed to deinit state %s. Code: 0x%X", 
+                stateMachineStateName(s_eCurrentState), 
+                lErr
+            );
+
+            esp_err_t lFailErr = s_enterFailureState();
+
+            if(lFailErr) {
+                ESP_LOGE(TAG, "Failed to enter failure state. Code: 0x%X", lFailErr);
+            }
 
             goto end_transition;
         }
@@ -67,7 +125,9 @@ static esp_err_t s_transitionTo(StateMachineStateId_t eNewState) {
     s_ePrevState = s_eCurrentState;
     s_eCurrentState = eNewState;
 
-    ESP_LOGI(TAG, "%s -> %s", stateMachineStateName(s_ePrevState), stateMachineStateName(s_eCurrentState));
+    ESP_LOGI(TAG, "%s -> %s", stateMachineStateName(s_ePrevState), 
+        stateMachineStateName(s_eCurrentState)
+    );
 
 
     // Enter new state
@@ -76,9 +136,36 @@ static esp_err_t s_transitionTo(StateMachineStateId_t eNewState) {
 
         lErr = pNextState->cbInit();
         if(lErr) {
-            ESP_LOGE(TAG, "Failed to init state %s. Code: 0x%X", stateMachineStateName(eNewState), lErr);
+            ESP_LOGE(TAG, "Failed to init state %s. Code: 0x%X", 
+                stateMachineStateName(eNewState), 
+                lErr
+            );
+            
+            /*
+                Try to cleanup state that we failed to enter
+            */
+            if(NULL != pNextState->cbDeinit) {
+                esp_err_t lCleanupErr = pNextState->cbDeinit();
 
-            // TODO: transition to fault/error state on state callback failure
+                if(lCleanupErr) {
+                    ESP_LOGE(TAG, "Failed to clean up state %s. Code: 0x%X",
+                        stateMachineStateName(eNewState),
+                        lCleanupErr
+                    );
+                }
+            }
+
+            /*
+            * If the failure state's own initialization failed,
+            * do not recursively attempt to enter it again.
+            */
+            if(eNewState != s_eFailureState) {
+                esp_err_t lFailureErr = s_enterFailureState();
+
+                if(lFailureErr) {
+                    ESP_LOGE(TAG, "Failed to enter failure state. Code: 0x%X", lFailureErr);
+                }
+            }
 
             goto end_transition;
         }
@@ -89,6 +176,7 @@ end_transition:
 
     return lErr;
 }
+
 
 
 /* -------------------------------------------------------------------------- */
@@ -189,6 +277,14 @@ esp_err_t stateMachineInit(void) {
         goto end_sm_init;
     }
 
+    // check if failure state is configured
+    if(STATE_MACHINE_STATE_MAX == s_eFailureState) {
+        ESP_LOGE(TAG, "No failure state configured");
+        lErr = ESP_ERR_INVALID_ARG;
+
+        goto end_sm_init;
+    }
+
 
     // create event queue
     s_pQueue = xQueueCreate(SM_QUEUE_LENGTH, sizeof(StateMachineEvent_t));
@@ -211,6 +307,11 @@ esp_err_t stateMachineInit(void) {
                 stateMachineStateName(s_eCurrentState), 
                 lErr
             );
+
+            esp_err_t lFailError = s_enterFailureState();
+            if(lFailError) {
+                ESP_LOGE(TAG, "Failed to enter failure state. Code: 0x%X", lFailError);
+            }
 
             goto cleanup_queue;
         }
@@ -363,3 +464,41 @@ end_post_event:
     return lErr;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Fail State Setter                                                          */
+/* -------------------------------------------------------------------------- */
+
+esp_err_t stateMachineSetFailureState(StateMachineStateId_t eState) {
+    
+    esp_err_t lErr = ESP_OK;
+
+    if(NULL != s_pQueue) {
+        ESP_LOGE(TAG, "Cannot set failure state after SM initialization");
+        lErr = ESP_ERR_INVALID_STATE;
+
+        goto end_fail_state_reg;
+    }
+
+    if(NULL == s_getState(eState)) {
+        ESP_LOGE(TAG, "Failure state %s not registered!", stateMachineStateName(eState));
+        lErr = ESP_ERR_INVALID_ARG;
+
+        goto end_fail_state_reg;
+    }
+
+    if(STATE_MACHINE_STATE_MAX != s_eFailureState) {
+        ESP_LOGE(TAG, "Failure state already configured");
+        lErr = ESP_ERR_INVALID_STATE;
+
+        goto end_fail_state_reg;
+    }
+
+    s_eFailureState = eState;
+
+    ESP_LOGI(TAG, "Failure state set to %s", stateMachineStateName(s_eFailureState));
+
+end_fail_state_reg:
+
+    return lErr;
+}

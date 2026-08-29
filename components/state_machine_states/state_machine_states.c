@@ -75,7 +75,14 @@ esp_err_t stateMachineStatesRegister(void) {
         goto end_register;
     }
 
-    ESP_LOGI(TAG, "All states registerd in state machine");
+    // set failure state
+    lErr = stateMachineSetFailureState(STATE_MACHINE_FAULT);
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to set failure state. Code: 0x%X", lErr);
+        goto end_register;
+    }
+
+    ESP_LOGI(TAG, "All states registered in state machine");
 
 end_register:
 
