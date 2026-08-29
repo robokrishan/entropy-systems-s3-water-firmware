@@ -42,4 +42,7 @@ void testStateInitFailure(void);
 
 void testStateDeinitFailure(void);
 
+
+void testHaltSequence(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

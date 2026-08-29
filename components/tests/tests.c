@@ -360,6 +360,192 @@ void testStateDeinitFailure(void) {
 }
 
 
+void testHaltSequence(void) {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 19;
+
+    ESP_LOGW(TAG, "=== TEST: HALT sequence ===");
+
+
+    /*
+     * INIT + HALT
+     *
+     * Nothing is active yet.
+     * Must remain in INIT.
+     */
+    ubTestPassCount += s_checkState(STATE_MACHINE_INIT);
+
+    s_postTestEvent(SM_EVENT_HALT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_INIT);
+
+
+    /*
+     * INIT -> POSITION_UNKNOWN
+     */
+    s_postTestEvent(SM_EVENT_SYSTEM_READY, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * POSITION_UNKNOWN + HALT
+     *
+     * Already stationary with unknown position.
+     * Must remain in POSITION_UNKNOWN.
+     */
+    s_postTestEvent(SM_EVENT_HALT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * Resolve position:
+     * POSITION_UNKNOWN -> STOWED
+     */
+    s_postTestEvent(SM_EVENT_UPPER_LIMIT_ACTIVE, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+
+
+    /*
+     * STOWED + HALT
+     *
+     * Already stationary.
+     * Must remain in STOWED.
+     */
+    s_postTestEvent(SM_EVENT_HALT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+
+
+    /*
+     * STOWED -> LOWERING
+     */
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
+
+
+    /*
+     * LOWERING + HALT
+     *
+     * Motion is interrupted before reaching a known
+     * endpoint, so position becomes unknown.
+     *
+     * Servo should physically stop.
+     */
+    s_postTestEvent(SM_EVENT_HALT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * Resume lowering from unknown position.
+     */
+    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
+
+
+    /*
+     * Simulate reaching lower limit.
+     *
+     * LOWERING -> DEPLOYED
+     */
+    s_postTestEvent(SM_EVENT_LOWER_LIMIT_ACTIVE, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+
+
+    /*
+     * DEPLOYED + HALT
+     *
+     * Already stationary and physical position is known.
+     * Must remain DEPLOYED.
+     */
+    s_postTestEvent(SM_EVENT_HALT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+
+
+    /*
+     * DEPLOYED -> PUMPING
+     */
+    s_postTestEvent(SM_EVENT_PUMP_ON, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_PUMPING);
+
+
+    /*
+     * PUMPING + HALT
+     *
+     * Pump operation stops, but nozzle remains
+     * physically deployed.
+     *
+     * PUMPING -> DEPLOYED
+     */
+    s_postTestEvent(SM_EVENT_HALT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+
+
+    /*
+     * DEPLOYED -> RAISING
+     */
+    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
+
+
+    /*
+     * RAISING + HALT
+     *
+     * Motion is interrupted before reaching a known
+     * endpoint, so position becomes unknown.
+     *
+     * Servo should physically stop.
+     */
+    s_postTestEvent(SM_EVENT_HALT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * Enter FAULT.
+     */
+    s_postTestEvent(SM_EVENT_FAULT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+
+
+    /*
+     * FAULT + HALT
+     *
+     * HALT must never clear a fault.
+     */
+    s_postTestEvent(SM_EVENT_HALT, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+
+
+    /*
+     * RESET clears the fault but position remains unknown.
+     */
+    s_postTestEvent(SM_EVENT_RESET, 500);
+    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * Verify normal operation can resume after HALT/fault handling.
+     */
+    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 1000);
+    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
+
+
+    if(ubTestPassCount == ubTestCount) {
+        ESP_LOGI(
+            TAG,
+            "TEST PASSED: %d / %d checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    } else {
+        ESP_LOGE(
+            TAG,
+            "TEST FAILED: %d / %d checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    }
+
+    ESP_LOGW(TAG, "=== END TEST ===");
+}
+
 /* Nozzle Servo Test */
 void testNozzleServoSequence(void) {
     esp_err_t lErr = ESP_OK;

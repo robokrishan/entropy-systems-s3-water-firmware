@@ -45,6 +45,10 @@ static void s_stateProcess(StateMachineEvent_t *pEvent) {
             ESP_LOG_EVENT(*pEvent);
             break;
 
+        case SM_EVENT_HALT:
+            ESP_LOG_EVENT(*pEvent);
+            break;
+
         case SM_EVENT_LOWER_LIMIT_ACTIVE:
             /*
              * Already at the lower limit.

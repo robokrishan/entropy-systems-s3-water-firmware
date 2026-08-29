@@ -63,6 +63,11 @@ static void s_stateProcess(StateMachineEvent_t *pEvent) {
             ESP_LOG_EVENT(*pEvent);
             break;
 
+        
+        case SM_EVENT_HALT:
+            ESP_LOG_EVENT(*pEvent);
+            break;
+
 
         default:
             ESP_LOGW(TAG, "Event %s ignored while in PUMPING",
@@ -84,6 +89,7 @@ static StateMachineStateId_t s_stateNextState(const StateMachineEvent_t* pEvent)
     }
     
     switch(pEvent->eId) {
+        case SM_EVENT_HALT:
         case SM_EVENT_PUMP_OFF:
         case SM_EVENT_RC_SIGNAL_LOST:
             return STATE_MACHINE_DEPLOYED;

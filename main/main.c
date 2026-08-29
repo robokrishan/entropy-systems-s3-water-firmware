@@ -42,7 +42,8 @@ void app_main(void) {
     // testNozzleServoSequence();
     // testNozzlServoNeutral();
     // testStateInitFailure();
-    testStateDeinitFailure();
+    // testStateDeinitFailure();
+    testHaltSequence();
 
     ESP_LOGI(TAG, "END TEST");
     

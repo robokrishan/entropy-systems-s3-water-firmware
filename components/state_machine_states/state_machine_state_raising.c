@@ -71,6 +71,9 @@ static void s_stateProcess(StateMachineEvent_t *pEvent) {
             ESP_LOG_EVENT(*pEvent);
             break;
 
+        case SM_EVENT_HALT:
+            ESP_LOG_EVENT(*pEvent);
+            break;
 
         default:
             ESP_LOGW(TAG, "Event %s ignored while in RAISING",
@@ -95,6 +98,7 @@ static StateMachineStateId_t s_stateNextState(const StateMachineEvent_t *pEvent)
         case SM_EVENT_UPPER_LIMIT_ACTIVE:
             return STATE_MACHINE_STOWED;
 
+        case SM_EVENT_HALT:
         case SM_EVENT_STOP_SPOOL:
             return STATE_MACHINE_POSITION_UNKNOWN;
 
