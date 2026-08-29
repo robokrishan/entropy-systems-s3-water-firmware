@@ -4,6 +4,7 @@
 #include "state_machine_common.h"
 #include "state_machine.h"
 #include "nozzle_servo.h"
+#include "pump.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -642,4 +643,33 @@ void testNozzlServoNeutral(void) {
     ESP_LOGW(TAG, "De-initialized");
 
     ESP_LOGI(TAG, "Nozzle servo test complete");
+}
+
+
+void testPumpSequence(void) {
+    esp_err_t lErr = ESP_OK;
+
+    lErr = pumpInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to initialize pump. Code: 0x%X", lErr);
+        return;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    lErr = pumpOn();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to power on pump. Code: 0x%X", lErr);
+        return;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    lErr = pumpOff();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to power off pump. Code: 0x%X", lErr);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Pump test success.");
 }

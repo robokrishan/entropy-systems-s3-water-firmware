@@ -45,4 +45,6 @@ void testStateDeinitFailure(void);
 
 void testHaltSequence(void);
 
+
+void testPumpSequence(void);
 #endif /* COMPONENTS_TESTS_H_ */

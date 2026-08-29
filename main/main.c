@@ -3,6 +3,7 @@
 #include "state_machine.h"
 #include "nozzle_servo.h"
 #include "state_machine_states.h"
+#include "pump.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -20,6 +21,12 @@ void app_main(void) {
     lErr = nozzleServoInit();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to init nozzle servo! Code: 0x%X", lErr);
+        return;
+    }
+
+    lErr = pumpInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init pump. Code: 0x%X", lErr);
         return;
     }
 
@@ -43,7 +50,8 @@ void app_main(void) {
     // testNozzlServoNeutral();
     // testStateInitFailure();
     // testStateDeinitFailure();
-    testHaltSequence();
+    // testHaltSequence();
+    testPumpSequence();
 
     ESP_LOGI(TAG, "END TEST");
     
