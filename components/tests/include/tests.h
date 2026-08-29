@@ -51,4 +51,7 @@ void testPumpSequence(void);
 
 void testLimitSwitchSequence(void);
 
+
+void testMotionTimeoutSequence(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

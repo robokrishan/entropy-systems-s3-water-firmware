@@ -6,6 +6,7 @@
 #include "nozzle_servo.h"
 #include "pump.h"
 #include "limit_switch.h"
+#include "motion_timeout.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -866,4 +867,185 @@ void testLimitSwitchSequence(void) {
     }
 
     ESP_LOGW(TAG, "=== END LIMIT SWITCH TEST ===");
+}
+
+
+void testMotionTimeoutSequence(void) {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 7;
+
+    esp_err_t lErr = ESP_OK;
+
+    ESP_LOGW(TAG, "=== TEST: MOTION TIMEOUT SEQUENCE ===");
+
+
+    /*
+     * Test starts in POSITION_UNKNOWN.
+     */
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * TEST 1:
+     * Start timer and allow it to expire.
+     *
+     * Expected:
+     * POSITION_UNKNOWN -> FAULT
+     */
+    ESP_LOGW(TAG, "TEST 1: Allow motion timeout to expire");
+
+    lErr = motionTimeoutStart();
+    if(lErr) {
+        ESP_LOGE(
+            TAG,
+            "Failed to start motion timeout. Code: 0x%X",
+            lErr
+        );
+        return;
+    }
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+    /*
+     * Timeout is 10 seconds.
+     * Give some additional margin for scheduling/event processing.
+     */
+    vTaskDelay(pdMS_TO_TICKS(11000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_FAULT);
+
+
+    /*
+     * Recover from FAULT.
+     */
+    s_postTestEvent(SM_EVENT_RESET, 500);
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * TEST 2:
+     * Start timer and cancel it before expiration.
+     *
+     * Expected:
+     * No FAULT occurs.
+     */
+    ESP_LOGW(TAG, "TEST 2: Stop motion timeout before expiry");
+
+    lErr = motionTimeoutStart();
+    if(lErr) {
+        ESP_LOGE(
+            TAG,
+            "Failed to start motion timeout. Code: 0x%X",
+            lErr
+        );
+        return;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    lErr = motionTimeoutStop();
+    if(lErr) {
+        ESP_LOGE(
+            TAG,
+            "Failed to stop motion timeout. Code: 0x%X",
+            lErr
+        );
+        return;
+    }
+
+    /*
+     * Wait longer than a complete timeout period.
+     * If stop worked, we must remain POSITION_UNKNOWN.
+     */
+    vTaskDelay(pdMS_TO_TICKS(11000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * TEST 3:
+     * Verify that calling Start() again while the timer is already
+     * running restarts the countdown.
+     */
+    ESP_LOGW(TAG, "TEST 3: Restart active motion timeout");
+
+    lErr = motionTimeoutStart();
+    if(lErr) {
+        ESP_LOGE(
+            TAG,
+            "Failed to start motion timeout. Code: 0x%X",
+            lErr
+        );
+        return;
+    }
+
+    /*
+     * Let 3 seconds pass.
+     */
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    /*
+     * Restart the timer.
+     *
+     * The timeout should now occur 10 seconds from HERE,
+     * rather than 10 seconds from the original start.
+     */
+    lErr = motionTimeoutStart();
+    if(lErr) {
+        ESP_LOGE(
+            TAG,
+            "Failed to restart motion timeout. Code: 0x%X",
+            lErr
+        );
+        return;
+    }
+
+    /*
+     * Wait 8 seconds.
+     *
+     * 11 seconds have passed since the first Start(), but only
+     * 8 seconds since the reset. Therefore we should NOT be
+     * in FAULT yet.
+     */
+    vTaskDelay(pdMS_TO_TICKS(8000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /*
+     * Wait another 3 seconds.
+     *
+     * We are now 11 seconds beyond the reset point, so the timer
+     * should have expired and generated FAULT.
+     */
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_FAULT);
+
+
+    if(ubTestPassCount == ubTestCount) {
+        ESP_LOGI(
+            TAG,
+            "TEST PASSED: %d / %d checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    } else {
+        ESP_LOGE(
+            TAG,
+            "TEST FAILED: %d / %d checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    }
+
+    ESP_LOGW(TAG, "=== END MOTION TIMEOUT TEST ===");
 }

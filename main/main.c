@@ -5,6 +5,7 @@
 #include "state_machine_states.h"
 #include "pump.h"
 #include "limit_switch.h"
+#include "motion_timeout.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -49,6 +50,12 @@ void app_main(void) {
         return;
     }
 
+    lErr = motionTimeoutInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init motion timeout! Code: 0x%X", lErr);
+        return;
+    }
+
     stateMachinePostEvent(SM_EVENT_SYSTEM_READY);
     limitSwitchSyncState();
 
@@ -62,7 +69,8 @@ void app_main(void) {
     // testStateDeinitFailure();
     // testHaltSequence();
     // testPumpSequence();
-    testLimitSwitchSequence();
+    // testLimitSwitchSequence();
+    testMotionTimeoutSequence();
 
     ESP_LOGI(TAG, "END TEST");
     
