@@ -5,4 +5,4 @@ idf_component_register(SRCS "state_machine_global_events.c" "state_machine_state
                         "state_machine_state_fault.c" "state_machine_global_events.c"
                     INCLUDE_DIRS "include"
                     REQUIRES state_machine_common state_machine
-                    PRIV_REQUIRES nozzle_servo pump)
+                    PRIV_REQUIRES nozzle_servo pump motion_timeout)

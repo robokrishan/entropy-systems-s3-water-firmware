@@ -2,6 +2,7 @@
 #include "state_machine_global_events.h"
 #include "nozzle_servo.h"
 #include "esp_log.h"
+#include "motion_timeout.h"
 
 static const char *TAG = "SM_LOWERING";
 
@@ -15,6 +16,12 @@ static esp_err_t s_stateInit(void) {
         ESP_LOGE(TAG, "Failed to init state. Code: 0x%X", lErr);
     }
 
+    lErr = motionTimeoutStart();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to start motion timeout. Code: 0x%X", lErr);
+        return lErr;
+    }
+
     return lErr;
 }
 
@@ -22,10 +29,20 @@ static esp_err_t s_stateInit(void) {
 /* state deinitialization */
 static esp_err_t s_stateDeinit(void) {
     esp_err_t lErr = ESP_OK;
+    esp_err_t lTimeoutErr = ESP_OK;
     
     lErr = nozzleServoStop();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to deinit state. Code: 0x%X", lErr);
+    }
+
+    lTimeoutErr = motionTimeoutStop();
+    if(lTimeoutErr) {
+        ESP_LOGE(TAG, "Failed to stop motion timeout. Code: 0x%X", lTimeoutErr);
+
+        if(ESP_OK == lErr) {
+            lErr = lTimeoutErr;
+        }
     }
 
     return lErr;

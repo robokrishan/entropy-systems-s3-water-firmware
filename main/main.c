@@ -44,17 +44,18 @@ void app_main(void) {
         return;
     }
 
+    lErr = motionTimeoutInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init motion timeout! Code: 0x%X", lErr);
+        return;
+    }
+
     lErr = limitSwitchInit();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to init limit switches! Code: 0x%X", lErr);
         return;
     }
 
-    lErr = motionTimeoutInit();
-    if(lErr) {
-        ESP_LOGE(TAG, "Failed to init motion timeout! Code: 0x%X", lErr);
-        return;
-    }
 
     stateMachinePostEvent(SM_EVENT_SYSTEM_READY);
     limitSwitchSyncState();
@@ -70,7 +71,8 @@ void app_main(void) {
     // testHaltSequence();
     // testPumpSequence();
     // testLimitSwitchSequence();
-    testMotionTimeoutSequence();
+    // testMotionTimeoutSequence();
+    testMotionTimeoutIntegrationSequence();
 
     ESP_LOGI(TAG, "END TEST");
     
