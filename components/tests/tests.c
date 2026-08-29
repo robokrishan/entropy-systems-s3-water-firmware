@@ -286,6 +286,8 @@ void testNozzlServoNeutral(void) {
 
     ESP_LOGI(TAG, "Starting nozzle servo test");
 
+    nozzleServoDeinit();
+
     lErr = nozzleServoInit();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to init nozzle servo! Code: 0x%X", lErr);

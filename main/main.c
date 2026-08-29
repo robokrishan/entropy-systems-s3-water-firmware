@@ -35,8 +35,9 @@ void app_main(void) {
         return;
     }
 
-    testNormalSequence();
+    // testNormalSequence();
     // testWrongSequence();
+    testFaultSequence();
 
     // testNozzleServoSequence();
     // testNozzlServoNeutral();
