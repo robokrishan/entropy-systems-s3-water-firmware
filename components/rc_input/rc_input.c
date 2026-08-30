@@ -11,14 +11,24 @@
 #define RC_CAPTURE_GROUP            0
 #define RC_INPUT_TASK_STACK         2048
 #define RC_INPUT_TASK_PRIORITY      5
+#define RC_LOW_MAX_US               1200        // deadband def
+#define RC_HIGH_MIN_US              1500
 
 static const char* TAG = "rc_input";
+
+
+typedef enum {
+    RC_INPUT_STATE_UNKNOWN = 0,
+    RC_INPUT_STATE_LOW,
+    RC_INPUT_STATE_HIGH,
+} RcInputState_t;
 
 static mcpwm_cap_timer_handle_t s_pCaptureTimer = NULL;
 static mcpwm_cap_channel_handle_t s_pCaptureChannel = NULL;
 static TaskHandle_t s_pTaskHandle = NULL;
 static bool s_isInitialized = false;
 static uint32_t s_ulCaptureResolutionHz = 0;
+static RcInputState_t s_eCurrentState = RC_INPUT_STATE_UNKNOWN;
 
 
 /* pwm signal capture callback */
@@ -73,7 +83,31 @@ static void s_rcInputTask(void* pArg) {
             portMAX_DELAY
         );
 
+        RcInputState_t eNewState = RC_INPUT_STATE_UNKNOWN;
+
+        if(ulPulseWidthUs <= RC_LOW_MAX_US) {
+            eNewState = RC_INPUT_STATE_LOW;
+        } else if(ulPulseWidthUs >= RC_HIGH_MIN_US) {
+            eNewState = RC_INPUT_STATE_HIGH;
+        } else { 
+            continue;
+        }
+
+        if(eNewState == s_eCurrentState) {
+            continue;
+        }
+
+        s_eCurrentState = eNewState;
+
+        if(RC_INPUT_STATE_LOW == eNewState) {
+            ESP_LOGI(TAG, "RC input LOW");
+        } else {
+            ESP_LOGI(TAG, "RC input HIGH");
+        }
+
+#ifdef DEBUG
         ESP_LOGI(TAG, "RC pulse width: %lu us", (unsigned long)ulPulseWidthUs);
+#endif
     }
 }
 
