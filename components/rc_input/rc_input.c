@@ -19,7 +19,7 @@
 #define RC_HIGH_MIN_US              1500
 #define RC_VALID_MIN_US             800
 #define RC_VALID_MAX_US             2200
-#define RC_SIGNAL_TIMEOUT_MS        2000        // signal timeout
+#define RC_SIGNAL_TIMEOUT_MS        500        // signal timeout
 
 static const char* TAG = "rc_input";
 
