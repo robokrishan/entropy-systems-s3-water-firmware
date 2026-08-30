@@ -9,7 +9,6 @@
 #include "freertos/task.h"
 
 #define RC_CAPTURE_GROUP            0
-#define RC_CAPTURE_RESOLUTION_HZ    1000000
 #define RC_INPUT_TASK_STACK         2048
 #define RC_INPUT_TASK_PRIORITY      5
 
@@ -19,6 +18,7 @@ static mcpwm_cap_timer_handle_t s_pCaptureTimer = NULL;
 static mcpwm_cap_channel_handle_t s_pCaptureChannel = NULL;
 static TaskHandle_t s_pTaskHandle = NULL;
 static bool s_isInitialized = false;
+static uint32_t s_ulCaptureResolutionHz = 0;
 
 
 /* pwm signal capture callback */
@@ -42,7 +42,9 @@ static bool s_captureCallback(
     } else if(MCPWM_CAP_EDGE_NEG == pEventData->cap_edge) {
         
         // end of high pulse
-        uint32_t ulPulseWidthUs = pEventData->cap_value - s_ulRisingEdgeValue;
+        uint32_t ulPulseWidthTicks = pEventData->cap_value - s_ulRisingEdgeValue;
+        uint32_t ulPulseWidthUs = (uint32_t)(((uint64_t)ulPulseWidthTicks*1000000ULL) /
+                                    s_ulCaptureResolutionHz);
 
         xTaskNotifyFromISR(
             s_pTaskHandle,
@@ -91,7 +93,7 @@ esp_err_t rcInputInit(void) {
     mcpwm_capture_timer_config_t sTimerConfig = {
         .group_id = RC_CAPTURE_GROUP,
         .clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
-        .resolution_hz = RC_CAPTURE_RESOLUTION_HZ
+        .resolution_hz = s_ulCaptureResolutionHz
     };
 
     // configure mcpwm capture timer
@@ -105,6 +107,23 @@ esp_err_t rcInputInit(void) {
 
         goto end_init;
     }
+
+
+    // get timer resolution
+    lErr = mcpwm_capture_timer_get_resolution(
+        s_pCaptureTimer,
+        &s_ulCaptureResolutionHz
+    );
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to get capture timer resolution. Code: 0x%X", lErr);
+
+        goto cleanup_timer;
+    }
+
+    ESP_LOGI(TAG, "Capture timer resolution: %lu Hz",
+        (unsigned long)s_ulCaptureResolutionHz
+    );
 
 
     // configure pwm input capture
@@ -188,6 +207,8 @@ esp_err_t rcInputInit(void) {
 
 
     s_isInitialized = true;
+    ESP_LOGI(TAG, "RC Input initialized");
+    goto end_init;
 
 cleanup_enabled_timer:
 

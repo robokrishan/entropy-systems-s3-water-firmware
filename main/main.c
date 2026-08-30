@@ -6,6 +6,7 @@
 #include "pump.h"
 #include "limit_switch.h"
 #include "motion_timeout.h"
+#include "rc_input.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -13,13 +14,15 @@
 
 const char* TAG = "main";
 
-
+#define RUN_ONLY 1
 
 void app_main(void) {
 
     ESP_LOGI(TAG, "Starting state machine test");
     
     esp_err_t lErr = ESP_OK;
+
+#ifndef RUN_ONLY
     lErr = nozzleServoInit();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to init nozzle servo! Code: 0x%X", lErr);
@@ -56,9 +59,18 @@ void app_main(void) {
         return;
     }
 
+#endif
 
+    lErr = rcInputInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init rc input! Code: 0x%X", lErr);
+        return;
+    }
+
+#ifndef RUN_ONLY
     stateMachinePostEvent(SM_EVENT_SYSTEM_READY);
     limitSwitchSyncState();
+#endif
 
     // testNormalSequence();
     // testWrongSequence();
@@ -72,7 +84,7 @@ void app_main(void) {
     // testPumpSequence();
     // testLimitSwitchSequence();
     // testMotionTimeoutSequence();
-    testMotionTimeoutIntegrationSequence();
+    // testMotionTimeoutIntegrationSequence();
 
     ESP_LOGI(TAG, "END TEST");
     
