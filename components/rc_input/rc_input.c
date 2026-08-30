@@ -1,5 +1,6 @@
 #include "rc_input.h"
 #include "device_config.h"
+#include "state_machine.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -7,12 +8,18 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 
 #define RC_CAPTURE_GROUP            0
 #define RC_INPUT_TASK_STACK         2048
 #define RC_INPUT_TASK_PRIORITY      5
-#define RC_LOW_MAX_US               1200        // deadband def
+
+// signal config
+#define RC_LOW_MAX_US               1200        // pwm deadband def
 #define RC_HIGH_MIN_US              1500
+#define RC_VALID_MIN_US             800
+#define RC_VALID_MAX_US             2200
+#define RC_SIGNAL_TIMEOUT_MS        2000        // signal timeout
 
 static const char* TAG = "rc_input";
 
@@ -29,6 +36,9 @@ static TaskHandle_t s_pTaskHandle = NULL;
 static bool s_isInitialized = false;
 static uint32_t s_ulCaptureResolutionHz = 0;
 static RcInputState_t s_eCurrentState = RC_INPUT_STATE_UNKNOWN;
+static TimerHandle_t s_pSignalLossTimer = NULL;
+static StaticTimer_t s_sSignalLossTimerBuffer;
+static bool s_isSignalLost = false;
 
 
 /* pwm signal capture callback */
@@ -68,6 +78,33 @@ static bool s_captureCallback(
 }
 
 
+/* pwm signal loss callback */
+static void s_signalLossCallback(TimerHandle_t pTimer) {
+    (void)pTimer;
+
+    if(s_isSignalLost) {
+        return;
+    }
+
+    s_isSignalLost = true;
+
+    /* 
+        force next valid rc command to be treated as 
+        new state when signal returns
+    */
+   s_eCurrentState = RC_INPUT_STATE_UNKNOWN;
+
+   ESP_LOGE(TAG, "RC signal lost");
+
+   esp_err_t lErr = stateMachinePostEvent(SM_EVENT_RC_SIGNAL_LOST);
+
+   if(lErr) {
+    ESP_LOGE(TAG, "Failed to post signal loss event. Code: 0x%X", lErr);
+   }
+}
+
+
+/* rtos task for reading pwm signal */
 static void s_rcInputTask(void* pArg) {
     (void)pArg;
 
@@ -83,6 +120,25 @@ static void s_rcInputTask(void* pArg) {
             portMAX_DELAY
         );
 
+        if((ulPulseWidthUs < RC_VALID_MIN_US) || (ulPulseWidthUs > RC_VALID_MAX_US)) {
+            ESP_LOGW(TAG, "Invalid RC pulse width: %lu us",
+                (unsigned long)ulPulseWidthUs
+            );
+
+            continue;
+        }
+
+        BaseType_t xResult = xTimerReset(s_pSignalLossTimer, portMAX_DELAY);
+        if(pdPASS != xResult) {
+            ESP_LOGE(TAG, "Failed to reset signal loss timer");
+            continue;
+        }
+
+        if(s_isSignalLost) {
+            s_isSignalLost = false;
+            ESP_LOGI(TAG, "signal restored");
+        }
+
         RcInputState_t eNewState = RC_INPUT_STATE_UNKNOWN;
 
         if(ulPulseWidthUs <= RC_LOW_MAX_US) {
@@ -93,6 +149,8 @@ static void s_rcInputTask(void* pArg) {
             continue;
         }
 
+
+        // suppress duplicate commands
         if(eNewState == s_eCurrentState) {
             continue;
         }
@@ -112,22 +170,14 @@ static void s_rcInputTask(void* pArg) {
 }
 
 
-// rc_input initialization
-esp_err_t rcInputInit(void) {
+static esp_err_t s_captureTimerInit(void) {
     esp_err_t lErr = ESP_OK;
-
-    if(s_isInitialized) {
-        ESP_LOGW(TAG, "Already initialized");
-        lErr = ESP_ERR_INVALID_STATE;
-
-        goto end_init;
-    }
 
     // create mcpwm capture timer config
     mcpwm_capture_timer_config_t sTimerConfig = {
         .group_id = RC_CAPTURE_GROUP,
         .clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
-        .resolution_hz = s_ulCaptureResolutionHz
+        .resolution_hz = 0  // default resolution
     };
 
     // configure mcpwm capture timer
@@ -139,7 +189,7 @@ esp_err_t rcInputInit(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to create capture timer. Code: 0x%X", lErr);
 
-        goto end_init;
+        return lErr;
     }
 
 
@@ -152,13 +202,19 @@ esp_err_t rcInputInit(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to get capture timer resolution. Code: 0x%X", lErr);
 
-        goto cleanup_timer;
+        return lErr;
     }
 
     ESP_LOGI(TAG, "Capture timer resolution: %lu Hz",
         (unsigned long)s_ulCaptureResolutionHz
     );
 
+    return ESP_OK;
+}
+
+
+static esp_err_t s_captureChannelInit(void) {
+    esp_err_t lErr = ESP_OK;
 
     // configure pwm input capture
     mcpwm_capture_channel_config_t sChannelConfig = {
@@ -177,7 +233,7 @@ esp_err_t rcInputInit(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to create capture channel. Code: 0x%X", lErr);
 
-        goto cleanup_timer;
+        return lErr;
     }
 
 
@@ -195,9 +251,35 @@ esp_err_t rcInputInit(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to register capture callback. Code: 0x%X", lErr);
 
-        goto cleanup_channel;
+        return lErr;
     }
 
+    return ESP_OK;
+}
+
+
+static esp_err_t s_signalLossTimerInit(void) {
+    // create signal loss timer
+    s_pSignalLossTimer = xTimerCreateStatic(
+        "rc_signal_loss",
+        pdMS_TO_TICKS(RC_SIGNAL_TIMEOUT_MS),
+        pdFALSE,
+        NULL,
+        s_signalLossCallback,
+        &s_sSignalLossTimerBuffer
+    );
+
+    if(NULL == s_pSignalLossTimer) {
+        ESP_LOGE(TAG, "Failed to create signal loss timer");
+
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+
+static esp_err_t s_processingTaskInit(void) {
 
     // cretae processing task before enabling capture interrupt
     BaseType_t xResult = xTaskCreate(
@@ -213,61 +295,159 @@ esp_err_t rcInputInit(void) {
         ESP_LOGE(TAG, "Failed to create RC input task");
 
         s_pTaskHandle = NULL;
-        lErr = ESP_FAIL;
-
-        goto cleanup_channel;
+        return ESP_FAIL;
     }
+
+    return ESP_OK;
+}
+
+
+static esp_err_t s_signalLossTimerStart(void) {
+    BaseType_t xTimerResult = xTimerStart(
+        s_pSignalLossTimer,
+        portMAX_DELAY
+    );
+
+    if(pdPASS != xTimerResult) {
+        ESP_LOGE(TAG, "Failed to start signal loss timer");
+
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+
+static esp_err_t s_captureStart(void) {
+    esp_err_t lErr = ESP_OK;
 
     lErr = mcpwm_capture_channel_enable(s_pCaptureChannel);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to enable capture channel. Code: 0x%X", lErr);
 
-        goto cleanup_task;
+        return lErr;
     }
 
     lErr = mcpwm_capture_timer_enable(s_pCaptureTimer);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to enable capture timer. Code: 0x%X", lErr);
 
-        goto cleanup_enabled_channel;
+        mcpwm_capture_channel_disable(s_pCaptureChannel);
+
+        return lErr;
     }
 
     lErr = mcpwm_capture_timer_start(s_pCaptureTimer);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to start capture timer. Code: 0x%X", lErr);
 
-        goto cleanup_enabled_timer;
+        mcpwm_capture_timer_disable(s_pCaptureTimer);
+        mcpwm_capture_channel_disable(s_pCaptureChannel);
+
+        return lErr;
+    }
+
+    return ESP_OK;
+}
+
+
+static void s_cleanup(void) {
+
+    /* stop signal loss timer if created and started*/
+    if(NULL != s_pSignalLossTimer) {
+
+        if(pdTRUE == xTimerIsTimerActive(s_pSignalLossTimer)) {
+            xTimerStop(s_pSignalLossTimer, portMAX_DELAY);
+        }
+    }
+
+    if(NULL != s_pTaskHandle) {
+        vTaskDelete(s_pTaskHandle);
+        s_pTaskHandle = NULL;
+    }
+
+    if(NULL != s_pSignalLossTimer) {
+        xTimerDelete(s_pSignalLossTimer, portMAX_DELAY);
+
+        s_pSignalLossTimer = NULL;
+    }
+
+    if(NULL != s_pCaptureChannel) {
+        mcpwm_del_capture_channel(s_pCaptureChannel);
+        
+        s_pCaptureChannel = NULL;
+    }
+
+    if(NULL != s_pCaptureTimer) {
+        mcpwm_del_capture_timer(s_pCaptureTimer);
+
+        s_pCaptureTimer = NULL;
+    }
+
+    s_ulCaptureResolutionHz = 0;
+    s_eCurrentState = RC_INPUT_STATE_UNKNOWN;
+    s_isSignalLost = false;
+    s_isInitialized = false;
+}
+
+// rc_input initialization
+esp_err_t rcInputInit(void) {
+    esp_err_t lErr = ESP_OK;
+
+    if(s_isInitialized) {
+        ESP_LOGW(TAG, "Already initialized");
+
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    lErr = s_captureTimerInit();
+    if(lErr) {
+        goto init_failed;
     }
 
 
+    lErr = s_captureChannelInit();
+    if(lErr) {
+        goto init_failed;
+    }
+
+
+    lErr = s_signalLossTimerInit();
+    if(lErr) {
+        goto init_failed;
+    }
+    
+
+    lErr = s_processingTaskInit();
+    if(lErr) {
+        goto init_failed;
+    }
+    
+
+    lErr = s_signalLossTimerStart();
+    if(lErr) {
+        goto init_failed;
+    }
+
+
+    lErr = s_captureStart();
+    if(lErr) {
+        goto init_failed;
+    }
+    
+
     s_isInitialized = true;
     ESP_LOGI(TAG, "RC Input initialized");
-    goto end_init;
+    
+    return ESP_OK;
 
-cleanup_enabled_timer:
+init_failed:
 
-    mcpwm_capture_timer_disable(s_pCaptureTimer);
+    ESP_LOGE(TAG, "Failed to initialize RC input. Code: 0x%X", lErr);
 
-cleanup_enabled_channel:
-
-    mcpwm_capture_channel_disable(s_pCaptureChannel);
-
-cleanup_task:
-
-    vTaskDelete(s_pTaskHandle);
-    s_pTaskHandle = NULL;
-
-cleanup_channel:
-
-    mcpwm_del_capture_channel(s_pCaptureChannel);
-    s_pCaptureChannel = NULL;
-
-cleanup_timer:
-
-    mcpwm_del_capture_timer(s_pCaptureTimer);
-    s_pCaptureTimer = NULL;
-
-end_init:
+    s_cleanup();
 
     return lErr;
 }
+
+
