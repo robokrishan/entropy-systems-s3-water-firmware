@@ -63,4 +63,7 @@ void testRcSignalLossSequence(void);
 
 void testRcSignalLossFsmSequence(void);
 
+
+void testRcPumpIntegrationSequence(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

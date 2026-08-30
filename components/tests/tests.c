@@ -1629,3 +1629,205 @@ void testRcSignalLossFsmSequence(void) {
 
     ESP_LOGW(TAG, "=== END RC SIGNAL LOSS FSM TEST ===");
 }
+
+
+void testRcPumpIntegrationSequence(void) {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 10;
+
+    ESP_LOGW(TAG, "=== TEST: RC PUMP INTEGRATION ===");
+    ESP_LOGW(TAG, "Ensure RC PWM is connected");
+    ESP_LOGW(TAG, "Set pump RC switch to LOW / OFF");
+
+    /*
+     * Give the RC input time to establish its initial LOW state.
+     */
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+
+    /*
+     * Test should begin in POSITION_UNKNOWN.
+     */
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /* ============================================================
+     * TEST 1: PUMP_ON must be rejected while STOWED
+     * ============================================================ */
+
+    /*
+     * Establish STOWED position.
+     */
+    s_postTestEvent(
+        SM_EVENT_UPPER_LIMIT_ACTIVE,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_STOWED);
+
+
+    /*
+     * Physically move RC switch HIGH.
+     *
+     * rc_input should generate:
+     *
+     * RC_INPUT_STATE_HIGH
+     *      ↓
+     * SM_EVENT_PUMP_ON
+     *
+     * But the FSM must reject PUMP_ON while STOWED.
+     */
+    ESP_LOGW(TAG, "MOVE PUMP RC SWITCH HIGH / ON");
+
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_STOWED);
+
+    /*
+     * Pump must physically remain OFF.
+     */
+
+
+    /*
+     * Return the RC switch LOW.
+     *
+     * This should generate SM_EVENT_PUMP_OFF, which is harmless
+     * while STOWED.
+     */
+    ESP_LOGW(TAG, "MOVE PUMP RC SWITCH LOW / OFF");
+
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_STOWED);
+
+
+    /* ============================================================
+     * TEST 2: PUMP_ON while DEPLOYED
+     * ============================================================ */
+
+    /*
+     * Begin normal lowering.
+     */
+    s_postTestEvent(
+        SM_EVENT_NOZZLE_EXTEND,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_LOWERING);
+
+
+    /*
+     * Simulate reaching the lower endpoint.
+     */
+    s_postTestEvent(
+        SM_EVENT_LOWER_LIMIT_ACTIVE,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_DEPLOYED);
+
+
+    /*
+     * Now physically switch HIGH.
+     *
+     * Expected:
+     *
+     * RC HIGH
+     *     ↓
+     * SM_EVENT_PUMP_ON
+     *     ↓
+     * DEPLOYED -> PUMPING
+     *     ↓
+     * pumpOn()
+     */
+    ESP_LOGW(TAG, "MOVE PUMP RC SWITCH HIGH / ON");
+
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_PUMPING);
+
+    /*
+     * Pump should now physically be running.
+     */
+
+
+    /*
+     * Leave the switch HIGH briefly.
+     *
+     * Duplicate suppression should prevent repeated PUMP_ON events.
+     * The FSM should simply remain PUMPING.
+     */
+    ESP_LOGW(TAG, "KEEP SWITCH HIGH");
+
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_PUMPING);
+
+
+    /*
+     * Move switch LOW.
+     *
+     * Expected:
+     *
+     * RC LOW
+     *     ↓
+     * SM_EVENT_PUMP_OFF
+     *     ↓
+     * PUMPING -> DEPLOYED
+     *     ↓
+     * pumpOff()
+     */
+    ESP_LOGW(TAG, "MOVE PUMP RC SWITCH LOW / OFF");
+
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_DEPLOYED);
+
+    /*
+     * Pump should now physically be OFF.
+     */
+
+
+    /*
+     * Leave LOW briefly to verify no duplicate commands
+     * cause any unexpected state changes.
+     */
+    ESP_LOGW(TAG, "KEEP SWITCH LOW");
+
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_DEPLOYED);
+
+
+    /* ============================================================
+     * RESULT
+     * ============================================================ */
+
+    if(ubTestPassCount == ubTestCount) {
+        ESP_LOGI(
+            TAG,
+            "TEST PASSED: %d / %d checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    } else {
+        ESP_LOGE(
+            TAG,
+            "TEST FAILED: %d / %d checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    }
+
+    ESP_LOGW(TAG, "=== END RC PUMP INTEGRATION TEST ===");
+}

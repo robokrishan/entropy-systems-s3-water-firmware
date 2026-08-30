@@ -104,6 +104,33 @@ static void s_signalLossCallback(TimerHandle_t pTimer) {
 }
 
 
+static esp_err_t s_processCommand(RcInputState_t eState) {
+    esp_err_t lErr = ESP_OK;
+
+    switch(eState) {
+        case RC_INPUT_STATE_HIGH:
+            ESP_LOGI(TAG, "RC command PUMP_OFF");
+            lErr = stateMachinePostEvent(SM_EVENT_PUMP_OFF);
+            break;
+
+        case RC_INPUT_STATE_LOW:
+            ESP_LOGI(TAG, "RC command PUMP_ON");
+            lErr = stateMachinePostEvent(SM_EVENT_PUMP_ON);
+            break;
+
+        default:
+            ESP_LOGW(TAG, "Invalid RC input state");
+            return ESP_ERR_INVALID_ARG;
+    }
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to post RC command event. Code: 0x%X", lErr);
+    }
+
+    return lErr;
+}
+
+
 /* rtos task for reading pwm signal */
 static void s_rcInputTask(void* pArg) {
     (void)pArg;
@@ -155,13 +182,21 @@ static void s_rcInputTask(void* pArg) {
             continue;
         }
 
-        s_eCurrentState = eNewState;
-
         if(RC_INPUT_STATE_LOW == eNewState) {
             ESP_LOGI(TAG, "RC input LOW");
         } else {
             ESP_LOGI(TAG, "RC input HIGH");
         }
+
+        esp_err_t lErr = s_processCommand(eNewState);
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to process RC command. Code: 0x%X", lErr);
+
+            continue;
+        }
+
+        // only record new state after successful event post
+        s_eCurrentState = eNewState;
 
 #ifdef DEBUG
         ESP_LOGI(TAG, "RC pulse width: %lu us", (unsigned long)ulPulseWidthUs);
