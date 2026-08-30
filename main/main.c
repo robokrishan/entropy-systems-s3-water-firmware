@@ -80,7 +80,8 @@ void app_main(void) {
     // testLimitSwitchSequence();
     // testMotionTimeoutSequence();
     // testMotionTimeoutIntegrationSequence();
-    testRcSignalLossSequence();
+    // testRcSignalLossSequence();
+    testRcSignalLossFsmSequence();
 
     ESP_LOGI(TAG, "END TEST");
     

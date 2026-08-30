@@ -39,6 +39,10 @@ static void s_stateProcess(StateMachineEvent_t* pEvent) {
             ESP_LOG_EVENT(*pEvent);
             break;
 
+        case SM_EVENT_RC_SIGNAL_LOST:
+            ESP_LOG_EVENT(*pEvent);
+            break;
+
         default:
             ESP_LOGW(TAG, "Event %s ignored while in INIT", stateMachineEventName(*pEvent));
             break;

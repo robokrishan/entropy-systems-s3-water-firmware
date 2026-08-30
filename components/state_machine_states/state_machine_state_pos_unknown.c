@@ -52,6 +52,11 @@ static void s_stateProcess(StateMachineEvent_t *pEvent) {
             ESP_LOG_EVENT(*pEvent);
             break;
 
+        
+        case SM_EVENT_RC_SIGNAL_LOST:
+            ESP_LOG_EVENT(*pEvent);
+            break;
+
 
         case SM_EVENT_UPPER_LIMIT_ACTIVE:
             /*

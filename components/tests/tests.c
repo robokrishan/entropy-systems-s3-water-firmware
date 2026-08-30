@@ -1422,3 +1422,210 @@ void testRcSignalLossSequence(void) {
 
     ESP_LOGW(TAG, "=== END RC SIGNAL LOSS TEST ===");
 }
+
+
+void testRcSignalLossFsmSequence(void) {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 12;
+
+    ESP_LOGW(TAG, "=== TEST: RC SIGNAL LOSS FSM ===");
+
+
+    /*
+     * Test starts in POSITION_UNKNOWN.
+     */
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /* ============================================================
+     * TEST 1: Signal loss while LOWERING
+     * ============================================================ */
+
+    /*
+     * Establish known STOWED position.
+     */
+    s_postTestEvent(
+        SM_EVENT_UPPER_LIMIT_ACTIVE,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_STOWED);
+
+
+    /*
+     * Begin lowering.
+     *
+     * Servo should begin extending and motion timeout should start.
+     */
+    s_postTestEvent(
+        SM_EVENT_NOZZLE_EXTEND,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_LOWERING);
+
+
+    /*
+     * Simulate RC signal loss during movement.
+     *
+     * Expected:
+     * LOWERING -> POSITION_UNKNOWN
+     *
+     * LOWERING.cbDeinit() should:
+     *   - stop servo
+     *   - stop motion timeout
+     */
+    s_postTestEvent(
+        SM_EVENT_RC_SIGNAL_LOST,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /* ============================================================
+     * TEST 2: Signal loss while PUMPING
+     * ============================================================ */
+
+    /*
+     * Establish known DEPLOYED position.
+     */
+    s_postTestEvent(
+        SM_EVENT_LOWER_LIMIT_ACTIVE,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_DEPLOYED);
+
+
+    /*
+     * Start pump.
+     */
+    s_postTestEvent(
+        SM_EVENT_PUMP_ON,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_PUMPING);
+
+
+    /*
+     * Signal loss while pumping.
+     *
+     * Expected:
+     * PUMPING -> DEPLOYED
+     *
+     * PUMPING.cbDeinit() should physically turn the pump OFF.
+     */
+    s_postTestEvent(
+        SM_EVENT_RC_SIGNAL_LOST,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_DEPLOYED);
+
+
+    /* ============================================================
+     * TEST 3: Signal loss while RAISING
+     * ============================================================ */
+
+    /*
+     * Begin raising.
+     *
+     * Servo should retract and motion timeout should start.
+     */
+    s_postTestEvent(
+        SM_EVENT_NOZZLE_RETRACT,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_RAISING);
+
+
+    /*
+     * Signal loss during movement.
+     *
+     * Expected:
+     * RAISING -> POSITION_UNKNOWN
+     *
+     * Servo and motion timeout should both stop.
+     */
+    s_postTestEvent(
+        SM_EVENT_RC_SIGNAL_LOST,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /* ============================================================
+     * TEST 4: Signal loss while FAULTED
+     * ============================================================ */
+
+    /*
+     * Enter FAULT.
+     */
+    s_postTestEvent(
+        SM_EVENT_FAULT,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_FAULT);
+
+
+    /*
+     * RC signal loss must NEVER clear a fault.
+     */
+    s_postTestEvent(
+        SM_EVENT_RC_SIGNAL_LOST,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_FAULT);
+
+
+    /*
+     * Recover normally using RESET.
+     */
+    s_postTestEvent(
+        SM_EVENT_RESET,
+        500
+    );
+
+    ubTestPassCount +=
+        s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+
+
+    /* ============================================================
+     * RESULT
+     * ============================================================ */
+
+    if(ubTestPassCount == ubTestCount) {
+        ESP_LOGI(
+            TAG,
+            "TEST PASSED: %d / %d checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    } else {
+        ESP_LOGE(
+            TAG,
+            "TEST FAILED: %d / %d checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    }
+
+    ESP_LOGW(TAG, "=== END RC SIGNAL LOSS FSM TEST ===");
+}

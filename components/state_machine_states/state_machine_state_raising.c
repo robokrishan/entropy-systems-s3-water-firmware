@@ -77,6 +77,11 @@ static void s_stateProcess(StateMachineEvent_t *pEvent) {
             ESP_LOG_EVENT(*pEvent);
             break;
 
+        
+        case SM_EVENT_RC_SIGNAL_LOST:
+            ESP_LOG_EVENT(*pEvent);
+            break;
+
 
         case SM_EVENT_LOWER_LIMIT_RELEASED:
             /*
@@ -117,6 +122,7 @@ static StateMachineStateId_t s_stateNextState(const StateMachineEvent_t *pEvent)
 
         case SM_EVENT_HALT:
         case SM_EVENT_STOP_SPOOL:
+        case SM_EVENT_RC_SIGNAL_LOST:
             return STATE_MACHINE_POSITION_UNKNOWN;
 
         default:

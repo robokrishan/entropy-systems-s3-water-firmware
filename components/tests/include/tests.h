@@ -60,4 +60,7 @@ void testMotionTimeoutIntegrationSequence(void);
 
 void testRcSignalLossSequence(void);
 
+
+void testRcSignalLossFsmSequence(void);
+
 #endif /* COMPONENTS_TESTS_H_ */
