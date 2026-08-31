@@ -69,4 +69,7 @@ void testRcPumpIntegrationSequence(void);
 
 void testRcNozzleIntegrationSequence(void);
 
+
+void testIna226Basic(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

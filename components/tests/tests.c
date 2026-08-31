@@ -7,6 +7,8 @@
 #include "pump.h"
 #include "limit_switch.h"
 #include "motion_timeout.h"
+#include "ina226.h"
+#include "i2c.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -2039,3 +2041,103 @@ void testRcNozzleIntegrationSequence(void) {
     ESP_LOGW(TAG, "========================================");
 }
 
+
+void testIna226Basic(void) {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 3;
+
+    ESP_LOGW(TAG, "========================================");
+    ESP_LOGW(TAG, "INA226 BASIC TEST");
+    ESP_LOGW(TAG, "========================================");
+
+
+    /* ============================================================
+     * TEST 1: I2C BUS INITIALIZATION
+     * ============================================================ */
+
+    esp_err_t lErr = i2cBusInit();
+
+    if(ESP_OK == lErr) {
+        ESP_LOGI(TAG, "I2C bus initialization PASSED");
+        ubTestPassCount++;
+    } else {
+        ESP_LOGE(
+            TAG,
+            "I2C bus initialization FAILED. Code: 0x%X",
+            lErr
+        );
+
+        goto test_complete;
+    }
+
+
+    /* ============================================================
+     * TEST 2: INA226 INITIALIZATION / DEVICE IDENTIFICATION
+     * ============================================================ */
+
+    lErr = ina226Init();
+
+    if(ESP_OK == lErr) {
+        ESP_LOGI(TAG, "INA226 initialization PASSED");
+        ubTestPassCount++;
+    } else {
+        ESP_LOGE(
+            TAG,
+            "INA226 initialization FAILED. Code: 0x%X",
+            lErr
+        );
+
+        goto test_complete;
+    }
+
+
+    /* ============================================================
+     * TEST 3: BUS VOLTAGE REGISTER READ
+     * ============================================================ */
+
+    float fBusVoltage = 0.0f;
+
+    lErr = ina226ReadBusVoltage(
+        &fBusVoltage
+    );
+
+    if(ESP_OK == lErr) {
+        ESP_LOGI(
+            TAG,
+            "INA226 bus voltage: %.3f V",
+            fBusVoltage
+        );
+
+        ESP_LOGI(TAG, "Bus voltage read PASSED");
+        ubTestPassCount++;
+    } else {
+        ESP_LOGE(
+            TAG,
+            "Bus voltage read FAILED. Code: 0x%X",
+            lErr
+        );
+    }
+
+
+test_complete:
+
+    ESP_LOGW(TAG, "========================================");
+
+    if(ubTestPassCount == ubTestCount) {
+        ESP_LOGI(
+            TAG,
+            "TEST PASSED: %u / %u checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    } else {
+        ESP_LOGE(
+            TAG,
+            "TEST FAILED: %u / %u checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    }
+
+    ESP_LOGW(TAG, "========================================");
+}

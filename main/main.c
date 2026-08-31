@@ -8,6 +8,7 @@
 #include "motion_timeout.h"
 #include "rc_input.h"
 #include "i2c.h"
+#include "ina226.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -131,6 +132,7 @@ void app_main(void) {
     // testRcSignalLossFsmSequence();
     // testRcPumpIntegrationSequence();
     // testRcNozzleIntegrationSequence();
+    testIna226Basic();
 
     
     ESP_LOGI(TAG, "END TEST");
