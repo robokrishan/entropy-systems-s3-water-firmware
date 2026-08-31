@@ -6,3 +6,5 @@
 #define CONFIG_PIN_LOWER_LIMIT          GPIO_NUM_11
 #define CONFIG_PIN_RC_INPUT_PUMP        GPIO_NUM_3
 #define CONFIG_PIN_RC_INPUT_NOZZLE      GPIO_NUM_2
+#define CONFIG_PIN_I2C_SDA              GPIO_NUM_8
+#define CONFIG_PIN_I2C_SCL              GPIO_NUM_9
