@@ -18,7 +18,7 @@ esp_err_t i2cBusInit(void) {
 
     if(s_isInitialized) {
         ESP_LOGW(TAG, "Already initialized");
-        return ESP_ERR_INVALID_STATE;
+        return lErr;
     }
 
     i2c_master_bus_config_t sBusConfig = {
