@@ -82,7 +82,8 @@ void app_main(void) {
     // testMotionTimeoutIntegrationSequence();
     // testRcSignalLossSequence();
     // testRcSignalLossFsmSequence();
-    testRcPumpIntegrationSequence();
+    // testRcPumpIntegrationSequence();
+    testRcNozzleIntegrationSequence();
 
     ESP_LOGI(TAG, "END TEST");
     

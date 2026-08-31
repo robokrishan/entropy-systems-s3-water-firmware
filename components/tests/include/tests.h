@@ -66,4 +66,7 @@ void testRcSignalLossFsmSequence(void);
 
 void testRcPumpIntegrationSequence(void);
 
+
+void testRcNozzleIntegrationSequence(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

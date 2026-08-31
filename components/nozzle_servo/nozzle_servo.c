@@ -3,7 +3,7 @@
 #include "esp_log.h"
 #include "device_config.h"
 
-#define NOZZLE_SERVO_STOP_US            1450
+#define NOZZLE_SERVO_STOP_US            1500
 #define NOZZLE_SERVO_EXTEND_US          1800
 #define NOZZLE_SERVO_RETRACT_US         1200
 

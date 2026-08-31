@@ -204,12 +204,12 @@ static esp_err_t s_processCommand(
         case RC_CHANNEL_NOZZLE:
             
             switch(eState) {
-                case RC_INPUT_STATE_HIGH:
+                case RC_INPUT_STATE_LOW:
                     ESP_LOGI(TAG, "RC command NOZZLE_RETRACT");
                     lErr = stateMachinePostEvent(SM_EVENT_NOZZLE_RETRACT);
                     break;
 
-                case RC_INPUT_STATE_LOW:
+                case RC_INPUT_STATE_HIGH:
                     ESP_LOGI(TAG, "RC command NOZZLE_EXTEND");
                     lErr = stateMachinePostEvent(SM_EVENT_NOZZLE_EXTEND);
                     break;
@@ -240,14 +240,6 @@ static void s_rcInputTask(void* pArg) {
     RcInputSample_t sSample;
 
     while(true) {
-        
-        // wait for pulse-width measurement from capture ISR
-        // xTaskNotifyWait(
-        //     0,
-        //     UINT32_MAX,
-        //     &ulPulseWidthUs,
-        //     portMAX_DELAY
-        // );
 
         xQueueReceive(s_pSampleQueue, &sSample, portMAX_DELAY);
         RcInputChannel_t* pChannel = &s_sChannels[sSample.eChannel];

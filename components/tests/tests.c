@@ -51,6 +51,64 @@ static void s_postTestEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs) {
 }
 
 
+static uint8_t s_waitForState(StateMachineStateId_t eExpectedState) {
+    StateMachineStateId_t eCurrentState = stateMachineGetCurrentState();
+    StateMachineStateId_t ePreviousState = eCurrentState;
+
+    ESP_LOGI(
+        TAG,
+        "Waiting for state: %s",
+        stateMachineStateName(eExpectedState)
+    );
+
+    while(eCurrentState != eExpectedState) {
+
+        /*
+         * Don't hang forever if the mechanism enters FAULT
+         * before reaching the expected state.
+         */
+        if(STATE_MACHINE_FAULT == eCurrentState) {
+            ESP_LOGE(
+                TAG,
+                "Entered FAULT while waiting for %s",
+                stateMachineStateName(eExpectedState)
+            );
+
+            return 0;
+        }
+
+        /*
+         * Only print when the FSM actually changes state.
+         */
+        if(eCurrentState != ePreviousState) {
+            ESP_LOGI(
+                TAG,
+                "Current state: %s",
+                stateMachineStateName(eCurrentState)
+            );
+
+            ePreviousState = eCurrentState;
+        }
+
+        /*
+         * This isn't an actuation delay. It just yields CPU time
+         * while polling the FSM.
+         */
+        vTaskDelay(pdMS_TO_TICKS(50));
+
+        eCurrentState = stateMachineGetCurrentState();
+    }
+
+    ESP_LOGI(
+        TAG,
+        "Reached state: %s",
+        stateMachineStateName(eExpectedState)
+    );
+
+    return 1;
+}
+
+
 void testNormalSequence(void) {
     uint8_t ubTestPassCount = 0;
     const uint8_t ubTestCount = 9;
@@ -1831,3 +1889,153 @@ void testRcPumpIntegrationSequence(void) {
 
     ESP_LOGW(TAG, "=== END RC PUMP INTEGRATION TEST ===");
 }
+
+
+void testRcNozzleIntegrationSequence(void) {
+    uint8_t ubTestPassCount = 0;
+    const uint8_t ubTestCount = 5;
+
+    ESP_LOGW(TAG, "========================================");
+    ESP_LOGW(TAG, "RC NOZZLE INTEGRATION TEST");
+    ESP_LOGW(TAG, "========================================");
+
+    /*
+     * Test prerequisites:
+     *
+     * - RC transmitter powered and connected
+     * - nozzle servo connected
+     * - upper and lower limit switches connected
+     * - nozzle starts physically at the upper/stowed limit
+     * - nozzle RC switch starts in RETRACT position
+     */
+
+    ESP_LOGW(TAG, "Place nozzle at UPPER/STOWED limit");
+    ESP_LOGW(TAG, "Set nozzle RC switch to RETRACT");
+
+
+    /* ============================================================
+     * INITIAL STATE
+     * ============================================================ */
+
+    ubTestPassCount +=
+        s_waitForState(STATE_MACHINE_STOWED);
+
+
+    /* ============================================================
+     * EXTEND NOZZLE
+     * ============================================================ */
+
+    ESP_LOGW(TAG, "----------------------------------------");
+    ESP_LOGW(TAG, "MOVE NOZZLE RC SWITCH TO EXTEND");
+    ESP_LOGW(TAG, "----------------------------------------");
+
+    /*
+     * Expected:
+     *
+     * RC switch
+     *      ↓
+     * RC_INPUT_STATE_LOW/HIGH
+     *      ↓
+     * SM_EVENT_NOZZLE_EXTEND
+     *      ↓
+     * STOWED -> LOWERING
+     *      ↓
+     * servo physically extends
+     */
+    ubTestPassCount +=
+        s_waitForState(STATE_MACHINE_LOWERING);
+
+
+    /*
+     * Now do nothing.
+     *
+     * The servo should continue lowering until the physical
+     * lower limit switch activates.
+     *
+     * Expected:
+     *
+     * lower limit
+     *      ↓
+     * SM_EVENT_LOWER_LIMIT_ACTIVE
+     *      ↓
+     * LOWERING -> DEPLOYED
+     *      ↓
+     * servo stops
+     */
+    ubTestPassCount +=
+        s_waitForState(STATE_MACHINE_DEPLOYED);
+
+
+    ESP_LOGW(TAG, "Nozzle successfully DEPLOYED");
+
+
+    /* ============================================================
+     * RETRACT NOZZLE
+     * ============================================================ */
+
+    ESP_LOGW(TAG, "----------------------------------------");
+    ESP_LOGW(TAG, "MOVE NOZZLE RC SWITCH TO RETRACT");
+    ESP_LOGW(TAG, "----------------------------------------");
+
+    /*
+     * Expected:
+     *
+     * RC switch
+     *      ↓
+     * SM_EVENT_NOZZLE_RETRACT
+     *      ↓
+     * DEPLOYED -> RAISING
+     *      ↓
+     * servo physically retracts
+     */
+    ubTestPassCount +=
+        s_waitForState(STATE_MACHINE_RAISING);
+
+
+    /*
+     * Again, do nothing.
+     *
+     * The physical upper limit should stop the movement.
+     *
+     * Expected:
+     *
+     * upper limit
+     *      ↓
+     * SM_EVENT_UPPER_LIMIT_ACTIVE
+     *      ↓
+     * RAISING -> STOWED
+     *      ↓
+     * servo stops
+     */
+    ubTestPassCount +=
+        s_waitForState(STATE_MACHINE_STOWED);
+
+
+    ESP_LOGW(TAG, "Nozzle successfully STOWED");
+
+
+    /* ============================================================
+     * RESULT
+     * ============================================================ */
+
+    ESP_LOGW(TAG, "========================================");
+
+    if(ubTestPassCount == ubTestCount) {
+        ESP_LOGI(
+            TAG,
+            "TEST PASSED: %u / %u checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    } else {
+        ESP_LOGE(
+            TAG,
+            "TEST FAILED: %u / %u checks passed",
+            ubTestPassCount,
+            ubTestCount
+        );
+    }
+
+    ESP_LOGW(TAG, "========================================");
+}
+
