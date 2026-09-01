@@ -2044,7 +2044,7 @@ void testRcNozzleIntegrationSequence(void) {
 
 void testIna226Basic(void) {
     uint8_t ubTestPassCount = 0;
-    const uint8_t ubTestCount = 3;
+    const uint8_t ubTestCount = 5;
 
     ESP_LOGW(TAG, "========================================");
     ESP_LOGW(TAG, "INA226 BASIC TEST");
@@ -2096,28 +2096,62 @@ void testIna226Basic(void) {
      * ============================================================ */
 
     float fBusVoltage = 0.0f;
+    float fShuntVoltage = 0.0f;
+    float fCurrent = 0.0f;
 
-    lErr = ina226ReadBusVoltage(
-        &fBusVoltage
-    );
+    lErr = ina226ReadBusVoltage(&fBusVoltage);
 
     if(ESP_OK == lErr) {
         ESP_LOGI(
             TAG,
-            "INA226 bus voltage: %.3f V",
+            "Bus voltage: %.3f V",
             fBusVoltage
         );
 
-        ESP_LOGI(TAG, "Bus voltage read PASSED");
         ubTestPassCount++;
     } else {
         ESP_LOGE(
             TAG,
-            "Bus voltage read FAILED. Code: 0x%X",
+            "Failed to read bus voltage. Code: 0x%X",
             lErr
         );
     }
 
+
+    lErr = ina226ReadShuntVoltage(&fShuntVoltage);
+
+    if(ESP_OK == lErr) {
+        ESP_LOGI(
+            TAG,
+            "Shunt voltage: %.6f V",
+            fShuntVoltage
+        );
+        ubTestPassCount++;
+    } else {
+        ESP_LOGE(
+            TAG,
+            "Failed to read shunt voltage. Code: 0x%X",
+            lErr
+        );
+    }
+
+
+    lErr = ina226ReadCurrent(&fCurrent);
+
+    if(ESP_OK == lErr) {
+        ESP_LOGI(
+            TAG,
+            "Current: %.6f A",
+            fCurrent
+        );
+        ubTestPassCount++;
+    } else {
+        ESP_LOGE(
+            TAG,
+            "Failed to read current. Code: 0x%X",
+            lErr
+        );
+    }
 
 test_complete:
 

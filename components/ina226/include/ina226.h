@@ -8,4 +8,21 @@ esp_err_t ina226Init(void);
 
 esp_err_t ina226ReadBusVoltage(float* pVoltageV);
 
+
+/**
+ * @brief Read the measured load current.
+ *
+ * @param[out] pCurrentA Pointer to store current in amperes.
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_ERR_INVALID_STATE if INA226 is not initialized
+ *      - ESP_ERR_INVALID_ARG if pCurrentA is NULL
+ *      - Appropriate esp_err_t error code on communication failure
+ */
+esp_err_t ina226ReadCurrent(float* pCurrentA);
+
+
+esp_err_t ina226ReadShuntVoltage(float* pShuntV);
+
 #endif /* COMPONENTS_INA226_H_ */

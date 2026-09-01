@@ -59,11 +59,11 @@ static esp_err_t s_initComponents(void) {
         goto end_component_init;
     }
 
-    lErr = rcInputInit();
-    if(lErr) {
-        ESP_LOGE(TAG, "Failed to init rc input! Code: 0x%X", lErr);
-        goto end_component_init;
-    }
+    // lErr = rcInputInit();
+    // if(lErr) {
+    //     ESP_LOGE(TAG, "Failed to init rc input! Code: 0x%X", lErr);
+    //     goto end_component_init;
+    // }
 
     stateMachinePostEvent(SM_EVENT_SYSTEM_READY);
     limitSwitchSyncState();

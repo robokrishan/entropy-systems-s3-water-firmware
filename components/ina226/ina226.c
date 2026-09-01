@@ -14,9 +14,16 @@
 #define INA226_REG_MANUFACTURE_ID   0xFE
 #define INA226_REG_DIE_ID           0xFF
 #define INA226_REG_CONFIGURATION    0x00
+#define INA226_REG_SHUNT_VOLTAGE    0x01
+#define INA226_REG_CURRENT          0x04
+#define INA226_REG_CALIBRATION      0x05
 
-#define INA226_MANUFACTURE_ID       0x5449
-#define INA226_DIA_ID               0x2260
+
+#define INA226_SHUNT_RESISTANCE_OHM 0.100f
+#define INA226_CURRENT_LSB_A        0.000025f
+#define INA226_SHUNT_VOLTAGE_LSB_V          0.0000025f
+#define INA226_CALIBRATION_VALUE    2048
+#define INA226_MANUFACTURER_ID       0x5449
 
 #define INA226_BUS_VOLTAGE_LSB_V    0.00125f
 
@@ -64,6 +71,30 @@ static esp_err_t s_readRegister(uint8_t ubRegister, uint16_t* pValue) {
 }
 
 
+static esp_err_t s_writeRegister(uint8_t ubRegister, uint16_t uwValue) {
+    uint8_t ubData[3] = {
+        ubRegister,
+        (uint8_t)(uwValue >> 8),
+        (uint8_t)(uwValue & 0xFF)
+    };
+
+    esp_err_t lErr = i2cBusWrite(
+        s_pDeviceHandle,
+        ubData,
+        sizeof(ubData)
+    );
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to write register 0x%02X. Code: 0x%X", 
+            ubRegister, 
+            lErr
+        );
+    }
+
+    return lErr;
+}
+
+
 esp_err_t ina226Init(void) {
     esp_err_t lErr = ESP_OK;
 
@@ -95,7 +126,7 @@ esp_err_t ina226Init(void) {
     ESP_LOGI(TAG, "Manufacture ID: 0x%04X", uwManufactureId);
 
 
-    if(INA226_MANUFACTURE_ID != uwManufactureId) {
+    if(INA226_MANUFACTURER_ID != uwManufactureId) {
         ESP_LOGW(TAG, "Manufacturer ID not recognized");
     }
 
@@ -108,10 +139,32 @@ esp_err_t ina226Init(void) {
 
     ESP_LOGI(TAG, "Die ID: 0x%04X", uwDieId);
 
-    s_isInitialized = true;
+    lErr = s_writeRegister(INA226_REG_CALIBRATION, INA226_CALIBRATION_VALUE);
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to configure calibration register. Code: 0x%X", lErr);
 
-    ESP_LOGI(TAG, "INA226 initialized");
+        return lErr;
+    }
 
+    // check calibration register
+    uint16_t uwCalibration = 0;
+
+    lErr = s_readRegister(
+        INA226_REG_CALIBRATION,
+        &uwCalibration
+    );
+
+    if(lErr) {
+        return lErr;
+    }
+
+    ESP_LOGI(
+        TAG,
+        "Calibration register: 0x%04X",
+        uwCalibration
+    );
+
+    // check configuration register
     uint16_t uwConfig = 0;
 
     lErr = s_readRegister(
@@ -128,6 +181,10 @@ esp_err_t ina226Init(void) {
         "Configuration register: 0x%04X",
         uwConfig
     );
+
+    s_isInitialized = true;
+
+    ESP_LOGI(TAG, "INA226 initialized");
 
     return ESP_OK;
 }
@@ -158,4 +215,56 @@ esp_err_t ina226ReadBusVoltage(float* pVoltageV) {
 }
 
 
+esp_err_t ina226ReadCurrent(float* pCurrentA) {
+    if(!s_isInitialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if(NULL == pCurrentA) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint16_t uwRawCurrent = 0;
+
+    esp_err_t lErr = ESP_OK;
+
+    lErr = s_readRegister(INA226_REG_CURRENT, &uwRawCurrent);
+    if(lErr) {
+        return lErr;
+    }
+
+    // current register gives signed value
+    int16_t wRawCurrent = (int16_t)uwRawCurrent;
+
+    *pCurrentA = (float)wRawCurrent * INA226_CURRENT_LSB_A;
+
+    return lErr;
+}
+
+
+esp_err_t ina226ReadShuntVoltage(float* pShuntV) {
+    if(!s_isInitialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if(NULL == pShuntV) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+
+    uint16_t uwRawVoltage = 0;
+
+    esp_err_t lErr = ESP_OK;
+
+    lErr = s_readRegister(INA226_REG_SHUNT_VOLTAGE, &uwRawVoltage);
+    if(lErr) {
+        return lErr;
+    }
+
+    int16_t wRawVoltage = (int16_t)uwRawVoltage;
+
+    *pShuntV = (float)wRawVoltage * INA226_SHUNT_VOLTAGE_LSB_V;
+
+    return lErr;
+}
 
