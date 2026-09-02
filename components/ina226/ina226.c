@@ -17,6 +17,8 @@
 #define INA226_REG_SHUNT_VOLTAGE    0x01
 #define INA226_REG_CURRENT          0x04
 #define INA226_REG_CALIBRATION      0x05
+#define INA226_REG_POWER            0x03
+#define INA226_POWER_LSB_W          0.000625f
 
 
 #define INA226_SHUNT_RESISTANCE_OHM 0.100f
