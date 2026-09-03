@@ -2044,7 +2044,7 @@ void testRcNozzleIntegrationSequence(void) {
 
 void testIna226Basic(void) {
     uint8_t ubTestPassCount = 0;
-    const uint8_t ubTestCount = 5;
+    const uint8_t ubTestCount = 6;
 
     ESP_LOGW(TAG, "========================================");
     ESP_LOGW(TAG, "INA226 BASIC TEST");
@@ -2151,6 +2151,16 @@ void testIna226Basic(void) {
             "Failed to read current. Code: 0x%X",
             lErr
         );
+    }
+
+    float fPower = 0;
+
+    lErr = ina226ReadPower(&fPower);
+    if(ESP_OK == lErr) {
+        ESP_LOGI(TAG, "Power: %.6f A", fPower);
+        ubTestPassCount++;
+    } else {
+        ESP_LOGE(TAG, "Failed to read power. Code: 0x%X", lErr);
     }
 
 test_complete:

@@ -26,6 +26,6 @@ esp_err_t ina226ReadCurrent(float* pCurrentA);
 esp_err_t ina226ReadShuntVoltage(float* pShuntV);
 
 
-esp_err_t ina226ReadPower();
+esp_err_t ina226ReadPower(float* pPower);
 
 #endif /* COMPONENTS_INA226_H_ */

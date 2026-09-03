@@ -270,3 +270,29 @@ esp_err_t ina226ReadShuntVoltage(float* pShuntV) {
     return lErr;
 }
 
+
+esp_err_t ina226ReadPower(float* pPower) {
+
+    esp_err_t lErr = ESP_OK;
+
+    if(!s_isInitialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if(NULL == pPower) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint16_t uwRawPower = 0;
+    
+    lErr = s_readRegister(INA226_REG_POWER, &uwRawPower);
+    if(lErr) {
+        return lErr;
+    }
+
+    int16_t wRawPower = (int16_t)uwRawPower;
+
+    *pPower = (float)wRawPower * INA226_POWER_LSB_W;
+
+    return lErr;
+}
