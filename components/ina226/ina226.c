@@ -8,26 +8,39 @@
 #include "esp_log.h"
 
 
+/*          I2C Configuration          */
 #define INA226_I2C_ADDRESS          0x40
 #define INA226_I2C_SPEED_HZ         400000
+
+
+/*          Register Addresses          */
 #define INA226_REG_BUS_VOLTAGE      0x02
-#define INA226_REG_MANUFACTURE_ID   0xFE
+#define INA226_REG_MANUFACTURER_ID  0xFE
 #define INA226_REG_DIE_ID           0xFF
 #define INA226_REG_CONFIGURATION    0x00
 #define INA226_REG_SHUNT_VOLTAGE    0x01
 #define INA226_REG_CURRENT          0x04
 #define INA226_REG_CALIBRATION      0x05
 #define INA226_REG_POWER            0x03
-#define INA226_POWER_LSB_W          25.0f * INA226_CURRENT_LSB_A
 
 
-#define INA226_SHUNT_RESISTANCE_OHM 0.100f
-#define INA226_CURRENT_LSB_A        0.000025f
-#define INA226_SHUNT_VOLTAGE_LSB_V  0.0000025f
-#define INA226_CALIBRATION_VALUE    2048
-#define INA226_MANUFACTURERER_ID      0x5449
+/*        Device Identification         */
+#define INA226_MANUFACTURERER_ID        0x5449
 
-#define INA226_BUS_VOLTAGE_LSB_V    0.00125f
+
+/*        Hardware Configuration        */
+#define INA226_SHUNT_RESISTANCE_OHM     0.100f
+
+
+/*        Measurement Scaling           */
+#define INA226_CURRENT_LSB_A            0.000025f
+#define INA226_POWER_LSB_W              25.0f * INA226_CURRENT_LSB_A
+#define INA226_SHUNT_VOLTAGE_LSB_V      0.0000025f
+#define INA226_BUS_VOLTAGE_LSB_V        0.00125f
+
+/*              Calibration             */
+#define INA226_CALIBRATION_VALUE        2048
+
 
 
 static const char* TAG = "ina226";
@@ -37,6 +50,7 @@ static i2c_master_dev_handle_t s_pDeviceHandle = NULL;
 static bool s_isInitialized = false;
 
 
+// Read a 16-bit INA226 register in MSB-first order.
 static esp_err_t s_readRegister(uint8_t ubRegister, uint16_t* pValue) {
     if(NULL == pValue) {
         return ESP_ERR_INVALID_ARG;
@@ -73,6 +87,7 @@ static esp_err_t s_readRegister(uint8_t ubRegister, uint16_t* pValue) {
 }
 
 
+// Write a 16-bit INA226 register in MSB-first order.
 static esp_err_t s_writeRegister(uint8_t ubRegister, uint16_t uwValue) {
     uint8_t ubData[3] = {
         ubRegister,
@@ -118,17 +133,17 @@ esp_err_t ina226Init(void) {
         return lErr;
     }
 
-    uint16_t uwManufactureId = 0;
+    uint16_t uwManufacturerId = 0;
 
-    lErr = s_readRegister(INA226_REG_MANUFACTURE_ID, &uwManufactureId);
+    lErr = s_readRegister(INA226_REG_MANUFACTURER_ID, &uwManufacturerId);
     if(lErr) {
         return lErr;
     }
 
-    ESP_LOGI(TAG, "Manufacture ID: 0x%04X", uwManufactureId);
+    ESP_LOGI(TAG, "Manufacturer ID: 0x%04X", uwManufacturerId);
 
 
-    if(INA226_MANUFACTURERER_ID != uwManufactureId) {
+    if(INA226_MANUFACTURERER_ID != uwManufacturerId) {
         ESP_LOGW(TAG, "Manufacturer ID not recognized");
     }
 
@@ -245,10 +260,13 @@ esp_err_t ina226ReadCurrent(float* pCurrentA) {
 
 
 esp_err_t ina226ReadShuntVoltage(float* pShuntV) {
+
+    // check if component initialized
     if(!s_isInitialized) {
         return ESP_ERR_INVALID_STATE;
     }
 
+    // check if argument passed
     if(NULL == pShuntV) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -258,39 +276,46 @@ esp_err_t ina226ReadShuntVoltage(float* pShuntV) {
 
     esp_err_t lErr = ESP_OK;
 
+    // read shunt voltage register value into variable
     lErr = s_readRegister(INA226_REG_SHUNT_VOLTAGE, &uwRawVoltage);
     if(lErr) {
         return lErr;
     }
 
+    // convert unsigned to signed value
     int16_t wRawVoltage = (int16_t)uwRawVoltage;
 
+    // convert raw signed value into readable voltage
     *pShuntV = (float)wRawVoltage * INA226_SHUNT_VOLTAGE_LSB_V;
 
     return lErr;
 }
 
 
-esp_err_t ina226ReadPower(float* pPower) {
+esp_err_t ina226ReadPower(float* pPowerW) {
 
     esp_err_t lErr = ESP_OK;
 
+    // check if component initialized
     if(!s_isInitialized) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    if(NULL == pPower) {
+    // check if argument passed
+    if(NULL == pPowerW) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint16_t uwRawPower = 0;
     
+    // read power register value into variable
     lErr = s_readRegister(INA226_REG_POWER, &uwRawPower);
     if(lErr) {
         return lErr;
     }
 
-    *pPower = (float)uwRawPower * INA226_POWER_LSB_W;
+    // convert register value into readable wattage
+    *pPowerW = (float)uwRawPower * INA226_POWER_LSB_W;
 
     return lErr;
 }
