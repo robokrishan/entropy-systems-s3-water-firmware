@@ -18,14 +18,14 @@
 #define INA226_REG_CURRENT          0x04
 #define INA226_REG_CALIBRATION      0x05
 #define INA226_REG_POWER            0x03
-#define INA226_POWER_LSB_W          0.000625f
+#define INA226_POWER_LSB_W          25.0f * INA226_CURRENT_LSB_A
 
 
 #define INA226_SHUNT_RESISTANCE_OHM 0.100f
 #define INA226_CURRENT_LSB_A        0.000025f
-#define INA226_SHUNT_VOLTAGE_LSB_V          0.0000025f
+#define INA226_SHUNT_VOLTAGE_LSB_V  0.0000025f
 #define INA226_CALIBRATION_VALUE    2048
-#define INA226_MANUFACTURER_ID       0x5449
+#define INA226_MANUFACTURERER_ID      0x5449
 
 #define INA226_BUS_VOLTAGE_LSB_V    0.00125f
 
@@ -128,7 +128,7 @@ esp_err_t ina226Init(void) {
     ESP_LOGI(TAG, "Manufacture ID: 0x%04X", uwManufactureId);
 
 
-    if(INA226_MANUFACTURER_ID != uwManufactureId) {
+    if(INA226_MANUFACTURERER_ID != uwManufactureId) {
         ESP_LOGW(TAG, "Manufacturer ID not recognized");
     }
 
