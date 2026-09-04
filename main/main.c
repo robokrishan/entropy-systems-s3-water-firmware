@@ -106,14 +106,14 @@ void app_main(void) {
     
     esp_err_t lErr = ESP_OK;
 
-    lErr = s_initComponents();
-    if(!lErr) {
-        ESP_LOGI(TAG, "Initialized all components");
-    }
+    // lErr = s_initComponents();
+    // if(!lErr) {
+    //     ESP_LOGI(TAG, "Initialized all components");
+    // }
 
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    s_testI2cScan();
+    // s_testI2cScan();
 
     // testNormalSequence();
     // testWrongSequence();
@@ -132,7 +132,9 @@ void app_main(void) {
     // testRcSignalLossFsmSequence();
     // testRcPumpIntegrationSequence();
     // testRcNozzleIntegrationSequence();
-    testIna226Basic();
+    // testIna226Basic();
+    // testSsd1306Basic();
+    testSsd1306WriteText();
 
     
     ESP_LOGI(TAG, "END TEST");

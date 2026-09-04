@@ -72,4 +72,10 @@ void testRcNozzleIntegrationSequence(void);
 
 void testIna226Basic(void);
 
+
+void testSsd1306Basic(void);
+
+
+void testSsd1306WriteText(void);
+
 #endif /* COMPONENTS_TESTS_H_ */

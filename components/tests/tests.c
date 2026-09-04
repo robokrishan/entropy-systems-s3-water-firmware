@@ -9,6 +9,7 @@
 #include "motion_timeout.h"
 #include "ina226.h"
 #include "i2c.h"
+#include "ssd1306.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -2184,4 +2185,38 @@ test_complete:
     }
 
     ESP_LOGW(TAG, "========================================");
+}
+
+
+void testSsd1306Basic(void) {
+    ESP_ERROR_CHECK(i2cBusInit());
+    ESP_ERROR_CHECK(ina226Init());
+    ESP_ERROR_CHECK(ssd1306Init());
+}
+
+
+void testSsd1306WriteText(void) {
+    ESP_ERROR_CHECK(i2cBusInit());
+    ESP_ERROR_CHECK(ssd1306Init());
+
+    ESP_ERROR_CHECK(
+        ssd1306WriteText(
+            0,
+            "WATER SAMPLER"
+        )
+    );
+
+    ESP_ERROR_CHECK(
+        ssd1306WriteText(
+            2,
+            "OLED TEST"
+        )
+    );
+
+    ESP_ERROR_CHECK(
+        ssd1306WriteText(
+            4,
+            "HELLO ESP32"
+        )
+    );
 }
