@@ -112,6 +112,95 @@ static uint8_t s_waitForState(StateMachineStateId_t eExpectedState) {
 }
 
 
+static esp_err_t s_updateDiagnosticsDisplay(void) {
+    float fBusVoltageV = 0.0f;
+    float fCurrentA = 0.0f;
+    float fPowerW = 0.0f;
+
+    esp_err_t lErr = ina226ReadBusVoltage(&fBusVoltageV);
+    if(lErr) {
+        return lErr;
+    }
+
+    lErr = ina226ReadCurrent(&fCurrentA);
+    if(lErr) {
+        return lErr;
+    }
+
+    lErr = ina226ReadPower(&fPowerW);
+    if(lErr) {
+        return lErr;
+    }
+
+    /*
+     * 21 visible characters maximum per row with the current
+     * 5x7 font + 1 pixel spacing.
+     */
+    char cVoltageText[22] = {0};
+    char cCurrentText[22] = {0};
+    char cPowerText[22] = {0};
+
+    snprintf(
+        cVoltageText,
+        sizeof(cVoltageText),
+        "BAT: %.2f V",
+        fBusVoltageV
+    );
+
+    snprintf(
+        cCurrentText,
+        sizeof(cCurrentText),
+        "CUR: %.2f mA",
+        fCurrentA * 1000.0f
+    );
+
+    snprintf(
+        cPowerText,
+        sizeof(cPowerText),
+        "PWR: %.1f mW",
+        fPowerW * 1000.0f
+    );
+
+    lErr = ssd1306WriteText(
+        0,
+        "WATER SAMPLER"
+    );
+
+    if(lErr) {
+        return lErr;
+    }
+
+    lErr = ssd1306WriteText(
+        2,
+        cVoltageText
+    );
+
+    if(lErr) {
+        return lErr;
+    }
+
+    lErr = ssd1306WriteText(
+        3,
+        cCurrentText
+    );
+
+    if(lErr) {
+        return lErr;
+    }
+
+    lErr = ssd1306WriteText(
+        4,
+        cPowerText
+    );
+
+    if(lErr) {
+        return lErr;
+    }
+
+    return ESP_OK;
+}
+
+
 void testNormalSequence(void) {
     uint8_t ubTestPassCount = 0;
     const uint8_t ubTestCount = 9;
@@ -2220,3 +2309,12 @@ void testSsd1306WriteText(void) {
         )
     );
 }
+
+
+void testSsd1306Diagnostics(void) {
+    ESP_ERROR_CHECK(i2cBusInit());
+    ESP_ERROR_CHECK(ina226Init());
+    ESP_ERROR_CHECK(ssd1306Init());
+    ESP_ERROR_CHECK(s_updateDiagnosticsDisplay());
+}
+

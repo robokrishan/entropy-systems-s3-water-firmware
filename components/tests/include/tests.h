@@ -78,4 +78,8 @@ void testSsd1306Basic(void);
 
 void testSsd1306WriteText(void);
 
+
+void testSsd1306Diagnostics(void);
+
+
 #endif /* COMPONENTS_TESTS_H_ */

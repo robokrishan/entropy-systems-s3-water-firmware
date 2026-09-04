@@ -203,7 +203,8 @@ esp_err_t ssd1306Init(void) {
 
 esp_err_t ssd1306Clear(void) {
     if(!s_isInitialized) {
-        return ESP_ERR_INVALID_STATE;
+        ESP_LOGW(TAG, "Already initialized!");
+        // return ESP_ERR_INVALID_STATE;
     }
 
     return s_clearDisplay();

@@ -134,7 +134,8 @@ void app_main(void) {
     // testRcNozzleIntegrationSequence();
     // testIna226Basic();
     // testSsd1306Basic();
-    testSsd1306WriteText();
+    // testSsd1306WriteText();
+    testSsd1306Diagnostics();
 
     
     ESP_LOGI(TAG, "END TEST");
