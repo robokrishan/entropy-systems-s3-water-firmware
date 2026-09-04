@@ -9,6 +9,8 @@
 #include "rc_input.h"
 #include "i2c.h"
 #include "ina226.h"
+#include "ssd1306.h"
+#include "diagnostics.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -29,11 +31,11 @@ static esp_err_t s_initComponents(void) {
         goto end_component_init;
     }
 
-    lErr = pumpInit();
-    if(lErr) {
-        ESP_LOGE(TAG, "Failed to init pump. Code: 0x%X", lErr);
-        goto end_component_init;
-    }
+    // lErr = pumpInit();
+    // if(lErr) {
+    //     ESP_LOGE(TAG, "Failed to init pump. Code: 0x%X", lErr);
+    //     goto end_component_init;
+    // }
 
     lErr = stateMachineStatesRegister();
     if(ESP_OK != lErr) {
@@ -74,6 +76,24 @@ static esp_err_t s_initComponents(void) {
         goto end_component_init;
     }
 
+    lErr = ina226Init();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init ina226");
+        goto end_component_init;
+    }
+
+    lErr = ssd1306Init();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init ina226");
+        goto end_component_init;
+    }
+
+    lErr = diagnosticsInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init diagnostics");
+        goto end_component_init;
+    }
+
 end_component_init:
 
     return lErr;
@@ -106,10 +126,10 @@ void app_main(void) {
     
     esp_err_t lErr = ESP_OK;
 
-    // lErr = s_initComponents();
-    // if(!lErr) {
-    //     ESP_LOGI(TAG, "Initialized all components");
-    // }
+    lErr = s_initComponents();
+    if(!lErr) {
+        ESP_LOGI(TAG, "Initialized all components");
+    }
 
     vTaskDelay(pdMS_TO_TICKS(3000));
 
@@ -135,7 +155,7 @@ void app_main(void) {
     // testIna226Basic();
     // testSsd1306Basic();
     // testSsd1306WriteText();
-    testSsd1306Diagnostics();
+    // testSsd1306Diagnostics();
 
     
     ESP_LOGI(TAG, "END TEST");
