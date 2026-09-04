@@ -290,9 +290,7 @@ esp_err_t ina226ReadPower(float* pPower) {
         return lErr;
     }
 
-    int16_t wRawPower = (int16_t)uwRawPower;
-
-    *pPower = (float)wRawPower * INA226_POWER_LSB_W;
+    *pPower = (float)uwRawPower * INA226_POWER_LSB_W;
 
     return lErr;
 }
