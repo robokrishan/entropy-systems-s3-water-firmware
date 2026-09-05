@@ -47,4 +47,17 @@ esp_err_t motionTimeoutStart(void);
  */
 esp_err_t motionTimeoutStop(void);
 
+
+/**
+ * @brief Deinitialize the motion timeout component.
+ *
+ * Stops and deletes the FreeRTOS software timer if it exists.
+ * Cleanup is best-effort; failures are logged but do not prevent
+ * subsequent cleanup operations from being attempted.
+ *
+ * The function is safe to call if the component is partially
+ * initialized, already deinitialized, or was never initialized.
+ */
+void motionTimeoutDeinit(void);
+
 #endif /* COMPONENTS_MOTION_TIMEOUT_H_ */

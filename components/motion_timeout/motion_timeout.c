@@ -135,3 +135,54 @@ end_stop:
 }
 
 
+/* deinitialize motion timeout */
+void motionTimeoutDeinit(void) {
+    BaseType_t xResult = pdPASS;
+
+    /*
+     * Nothing to clean up.
+     *
+     * Reset the initialization flag as a defensive measure in case
+     * the internal state is inconsistent.
+     */
+    if(NULL == s_pTimerHandle) {
+        s_isInitialized = false;
+        return;
+    }
+
+
+    /*
+     * Stop the timer first if it is currently active.
+     *
+     * Failure to stop the timer must not prevent us from attempting
+     * to delete it.
+     */
+    if(pdFALSE != xTimerIsTimerActive(s_pTimerHandle)) {
+        xResult = xTimerStop(s_pTimerHandle, portMAX_DELAY);
+
+        if(pdPASS != xResult) {
+            ESP_LOGE(TAG, "Failed to stop motion timeout during deinit");
+        }
+    }
+
+
+    /*
+     * Delete the timer regardless of whether the stop operation
+     * succeeded.
+     */
+    xResult = xTimerDelete(s_pTimerHandle, portMAX_DELAY);
+
+    if(pdPASS != xResult) {
+        ESP_LOGE(TAG, "Failed to delete motion timeout timer");
+
+        /*
+         * Preserve the handle and initialized flag so that a later
+         * deinit call can retry cleanup.
+         */
+    } else {
+        s_pTimerHandle = NULL;
+        s_isInitialized = false;
+
+        ESP_LOGI(TAG, "Motion timeout deinitialized");
+    }
+}
