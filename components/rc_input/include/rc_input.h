@@ -18,4 +18,20 @@
  */
 esp_err_t rcInputInit(void);
 
+
+/**
+ * @brief Deinitialize the RC input component.
+ *
+ * Stops PWM capture and signal-loss monitoring, deletes the processing task
+ * and queue, releases MCPWM capture resources, and resets internal channel
+ * state.
+ *
+ * Cleanup is best-effort; a failure while releasing one resource is logged
+ * without preventing the remaining resources from being cleaned up.
+ *
+ * The function is safe to call when the component is partially initialized,
+ * already deinitialized, or was never initialized.
+ */
+void rcInputDeinit(void);
+
 #endif /* COMPONENTS_RC_INPUT_H_ */

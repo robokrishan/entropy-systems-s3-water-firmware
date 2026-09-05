@@ -12,7 +12,7 @@
 #include "freertos/queue.h"
 
 #define RC_CAPTURE_GROUP            0
-#define RC_INPUT_TASK_STACK         2048
+#define RC_INPUT_TASK_STACK         4096
 #define RC_INPUT_TASK_PRIORITY      5
 #define RC_INPUT_QUEUE_LENGTH       10
 
@@ -50,6 +50,7 @@ typedef struct {
     uint32_t ulRisingEdgeValue;
     bool hasRisingEdge;
     RcInputState_t eCurrentState;
+    bool isCaptureEnabled;
 } RcInputChannel_t;
 
 
@@ -61,17 +62,18 @@ typedef struct {
 
 
 static mcpwm_cap_timer_handle_t s_pCaptureTimer = NULL;
-// static mcpwm_cap_channel_handle_t s_pCaptureChannel = NULL;
 static TaskHandle_t s_pTaskHandle = NULL;
 static bool s_isInitialized = false;
 static uint32_t s_ulCaptureResolutionHz = 0;
-// static RcInputState_t s_eCurrentState = RC_INPUT_STATE_UNKNOWN;
 static TimerHandle_t s_pSignalLossTimer = NULL;
 static StaticTimer_t s_sSignalLossTimerBuffer;
 static bool s_isSignalLost = false;
 static QueueHandle_t s_pSampleQueue = NULL;
 static StaticQueue_t s_sSampleQueueBuffer;
 static uint8_t s_ubSampleQueueStorage[RC_INPUT_QUEUE_LENGTH*sizeof(RcInputSample_t)];
+static bool s_isCaptureTimerEnabled = false;
+static bool s_isCaptureTimerStarted = false;
+static bool s_isShuttingDown = false;
 
 
 static RcInputChannel_t s_sChannels[RC_CHANNEL_MAX] = {
@@ -81,7 +83,8 @@ static RcInputChannel_t s_sChannels[RC_CHANNEL_MAX] = {
         .pCaptureChannel = NULL,
         .ulRisingEdgeValue = 0,
         .hasRisingEdge = false,
-        .eCurrentState = RC_INPUT_STATE_UNKNOWN
+        .eCurrentState = RC_INPUT_STATE_UNKNOWN,
+        .isCaptureEnabled = false
     },
 
     [RC_CHANNEL_NOZZLE] = {
@@ -90,7 +93,8 @@ static RcInputChannel_t s_sChannels[RC_CHANNEL_MAX] = {
         .pCaptureChannel = NULL,
         .ulRisingEdgeValue = 0,
         .hasRisingEdge = false,
-        .eCurrentState = RC_INPUT_STATE_UNKNOWN
+        .eCurrentState = RC_INPUT_STATE_UNKNOWN,
+        .isCaptureEnabled = false
     }
 };
 
@@ -102,14 +106,15 @@ static bool s_captureCallback(
     void* pUserData
 ) {
     (void)pCaptureChannel;
-
     RcInputChannel_t* pChannel = (RcInputChannel_t*)pUserData;
 
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if(s_isShuttingDown || (NULL == pEventData) || (NULL == pChannel) ||
+        (NULL == s_pSampleQueue) || (0 == s_ulCaptureResolutionHz)) {
 
-    if(NULL == pChannel) {
         return false;
     }
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
 
     if(MCPWM_CAP_EDGE_POS == pEventData->cap_edge) {
@@ -148,6 +153,10 @@ static bool s_captureCallback(
 /* pwm signal loss callback */
 static void s_signalLossCallback(TimerHandle_t pTimer) {
     (void)pTimer;
+
+    if(s_isShuttingDown || !s_isInitialized) {
+        return;
+    }
 
     if(s_isSignalLost) {
         return;
@@ -236,12 +245,24 @@ static esp_err_t s_processCommand(
 static void s_rcInputTask(void* pArg) {
     (void)pArg;
 
-    // uint32_t ulPulseWidthUs = 0;
     RcInputSample_t sSample;
 
     while(true) {
 
-        xQueueReceive(s_pSampleQueue, &sSample, portMAX_DELAY);
+        if(pdTRUE != xQueueReceive(s_pSampleQueue, &sSample, portMAX_DELAY)) {
+            continue;
+        }
+
+        if((uint32_t)sSample.eChannel >= (uint32_t)RC_CHANNEL_MAX) {
+            ESP_LOGE(
+                TAG,
+                "Invalid RC channel received: %u",
+                (unsigned int)sSample.eChannel
+            );
+
+            continue;
+        }
+
         RcInputChannel_t* pChannel = &s_sChannels[sSample.eChannel];
 
         if((sSample.ulPulseWidthUs < RC_VALID_MIN_US) || (sSample.ulPulseWidthUs > RC_VALID_MAX_US)) {
@@ -296,7 +317,7 @@ static void s_rcInputTask(void* pArg) {
         pChannel->eCurrentState = eNewState;
 
 #ifdef DEBUG
-        ESP_LOGI(TAG, "RC pulse width: %lu us", (unsigned long)ulPulseWidthUs);
+    ESP_LOGI(TAG, "RC pulse width: %lu us", (unsigned long)sSample.ulPulseWidthUs);
 #endif
     }
 }
@@ -420,7 +441,7 @@ static esp_err_t s_signalLossTimerInit(void) {
 
 static esp_err_t s_processingTaskInit(void) {
 
-    // cretae processing task before enabling capture interrupt
+    // create processing task before enabling capture interrupt
     BaseType_t xResult = xTaskCreate(
         s_rcInputTask,
         "rc_input",
@@ -459,7 +480,6 @@ static esp_err_t s_signalLossTimerStart(void) {
 
 static esp_err_t s_captureStart(void) {
     esp_err_t lErr = ESP_OK;
-    uint8_t ubEnabledChannels = 0;
 
     for(uint8_t i = 0; i < RC_CHANNEL_MAX; i++) {
         lErr = mcpwm_capture_channel_enable(s_sChannels[i].pCaptureChannel);
@@ -469,10 +489,10 @@ static esp_err_t s_captureStart(void) {
                 lErr
             );
 
-            goto rollback_channels;
+            goto rollback_capture;
         }
 
-        ubEnabledChannels++;
+        s_sChannels[i].isCaptureEnabled = true;
     }
 
 
@@ -480,26 +500,74 @@ static esp_err_t s_captureStart(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to enable capture timer. Code: 0x%X", lErr);
 
-        goto rollback_channels;
+        goto rollback_capture;
     }
+
+    s_isCaptureTimerEnabled = true;
+
 
     lErr = mcpwm_capture_timer_start(s_pCaptureTimer);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to start capture timer. Code: 0x%X", lErr);
 
-        goto rollback_channels;
+        goto rollback_capture;
     }
+
+    s_isCaptureTimerStarted = true;
 
     return ESP_OK;
 
-rollback_channels:
 
-    while(ubEnabledChannels > 0) {
-        ubEnabledChannels--;
+rollback_capture:
 
-        mcpwm_capture_channel_disable(
-            s_sChannels[ubEnabledChannels].pCaptureChannel
-        );
+    if(s_isCaptureTimerStarted) {
+        esp_err_t lStopErr =
+            mcpwm_capture_timer_stop(s_pCaptureTimer);
+
+        if(lStopErr) {
+            ESP_LOGE(
+                TAG,
+                "Failed to stop capture timer during rollback. Code: 0x%X",
+                lStopErr
+            );
+        } else {
+            s_isCaptureTimerStarted = false;
+        }
+    }
+
+    if(s_isCaptureTimerEnabled) {
+        esp_err_t lDisableErr =
+            mcpwm_capture_timer_disable(s_pCaptureTimer);
+
+        if(lDisableErr) {
+            ESP_LOGE(
+                TAG,
+                "Failed to disable capture timer during rollback. Code: 0x%X",
+                lDisableErr
+            );
+        } else {
+            s_isCaptureTimerEnabled = false;
+        }
+    }
+
+    for(uint8_t i = 0; i < RC_CHANNEL_MAX; i++) {
+        if(s_sChannels[i].isCaptureEnabled) {
+            esp_err_t lDisableErr =
+                mcpwm_capture_channel_disable(
+                    s_sChannels[i].pCaptureChannel
+                );
+
+            if(lDisableErr) {
+                ESP_LOGE(
+                    TAG,
+                    "Failed to disable capture channel %d during rollback. Code: 0x%X",
+                    i,
+                    lDisableErr
+                );
+            } else {
+                s_sChannels[i].isCaptureEnabled = false;
+            }
+        }
     }
 
     return lErr;
@@ -525,64 +593,213 @@ static esp_err_t s_sampleQueueInit(void) {
 
 
 static void s_cleanup(void) {
+    esp_err_t lErr = ESP_OK;
+    BaseType_t xResult = pdPASS;
 
-    /* stop signal loss timer if created and started*/
-    if(NULL != s_pSignalLossTimer) {
+    s_isShuttingDown = true;
+    s_isInitialized = false;
 
-        if(pdTRUE == xTimerIsTimerActive(s_pSignalLossTimer)) {
-            xTimerStop(s_pSignalLossTimer, portMAX_DELAY);
+
+    /*
+     * Disable capture channels first so that no new ISR callbacks
+     * can write samples into the queue during teardown.
+     */
+    for(uint8_t i = 0; i < RC_CHANNEL_MAX; i++) {
+        if(
+            (NULL != s_sChannels[i].pCaptureChannel) &&
+            s_sChannels[i].isCaptureEnabled
+        ) {
+            lErr = mcpwm_capture_channel_disable(
+                s_sChannels[i].pCaptureChannel
+            );
+
+            if(lErr) {
+                ESP_LOGE(
+                    TAG,
+                    "Failed to disable capture channel %d during cleanup. Code: 0x%X",
+                    i,
+                    lErr
+                );
+            } else {
+                s_sChannels[i].isCaptureEnabled = false;
+            }
         }
     }
 
+
+    /*
+     * Stop and disable the capture timer.
+     */
+    if(
+        (NULL != s_pCaptureTimer) &&
+        s_isCaptureTimerStarted
+    ) {
+        lErr = mcpwm_capture_timer_stop(s_pCaptureTimer);
+
+        if(lErr) {
+            ESP_LOGE(
+                TAG,
+                "Failed to stop capture timer during cleanup. Code: 0x%X",
+                lErr
+            );
+        } else {
+            s_isCaptureTimerStarted = false;
+        }
+    }
+
+    if(
+        (NULL != s_pCaptureTimer) &&
+        s_isCaptureTimerEnabled
+    ) {
+        lErr = mcpwm_capture_timer_disable(s_pCaptureTimer);
+
+        if(lErr) {
+            ESP_LOGE(
+                TAG,
+                "Failed to disable capture timer during cleanup. Code: 0x%X",
+                lErr
+            );
+        } else {
+            s_isCaptureTimerEnabled = false;
+        }
+    }
+
+
+    /*
+     * Stop the RC signal-loss timer.
+     */
+    if(NULL != s_pSignalLossTimer) {
+        if(pdTRUE == xTimerIsTimerActive(s_pSignalLossTimer)) {
+            xResult = xTimerStop(
+                s_pSignalLossTimer,
+                portMAX_DELAY
+            );
+
+            if(pdPASS != xResult) {
+                ESP_LOGE(
+                    TAG,
+                    "Failed to stop signal-loss timer during cleanup"
+                );
+            }
+        }
+    }
+
+
+    /*
+     * Delete the processing task before deleting the queue it uses.
+     */
     if(NULL != s_pTaskHandle) {
         vTaskDelete(s_pTaskHandle);
         s_pTaskHandle = NULL;
     }
 
-    if(NULL != s_pSignalLossTimer) {
-        xTimerDelete(s_pSignalLossTimer, portMAX_DELAY);
 
-        s_pSignalLossTimer = NULL;
+    /*
+     * Delete the signal-loss timer.
+     */
+    if(NULL != s_pSignalLossTimer) {
+        xResult = xTimerDelete(
+            s_pSignalLossTimer,
+            portMAX_DELAY
+        );
+
+        if(pdPASS != xResult) {
+            ESP_LOGE(
+                TAG,
+                "Failed to delete signal-loss timer during cleanup"
+            );
+        } else {
+            s_pSignalLossTimer = NULL;
+        }
     }
 
+
+    /*
+     * Delete the sample queue after both its producer and consumer
+     * have been stopped.
+     */
     if(NULL != s_pSampleQueue) {
         vQueueDelete(s_pSampleQueue);
         s_pSampleQueue = NULL;
     }
 
+
+    /*
+     * Delete capture channels.
+     */
     for(uint8_t i = 0; i < RC_CHANNEL_MAX; i++) {
         if(NULL != s_sChannels[i].pCaptureChannel) {
-            mcpwm_del_capture_channel(
+            lErr = mcpwm_del_capture_channel(
                 s_sChannels[i].pCaptureChannel
             );
 
-            s_sChannels[i].pCaptureChannel = NULL;
+            if(lErr) {
+                ESP_LOGE(
+                    TAG,
+                    "Failed to delete capture channel %d. Code: 0x%X",
+                    i,
+                    lErr
+                );
+            } else {
+                s_sChannels[i].pCaptureChannel = NULL;
+                s_sChannels[i].isCaptureEnabled = false;
+            }
         }
 
         s_sChannels[i].ulRisingEdgeValue = 0;
         s_sChannels[i].hasRisingEdge = false;
-        s_sChannels[i].eCurrentState = RC_INPUT_STATE_UNKNOWN;
+        s_sChannels[i].eCurrentState =
+            RC_INPUT_STATE_UNKNOWN;
     }
 
+
+    /*
+     * Delete capture timer last.
+     */
     if(NULL != s_pCaptureTimer) {
-        mcpwm_del_capture_timer(s_pCaptureTimer);
+        lErr = mcpwm_del_capture_timer(
+            s_pCaptureTimer
+        );
 
-        s_pCaptureTimer = NULL;
+        if(lErr) {
+            ESP_LOGE(
+                TAG,
+                "Failed to delete capture timer. Code: 0x%X",
+                lErr
+            );
+        } else {
+            s_pCaptureTimer = NULL;
+            s_isCaptureTimerEnabled = false;
+            s_isCaptureTimerStarted = false;
+        }
     }
+
 
     s_ulCaptureResolutionHz = 0;
     s_isSignalLost = false;
-    s_isInitialized = false;
+    s_isShuttingDown = false;
+
+    ESP_LOGI(TAG, "RC input cleanup complete");
 }
 
 // rc_input initialization
 esp_err_t rcInputInit(void) {
     esp_err_t lErr = ESP_OK;
 
-    if(s_isInitialized) {
-        ESP_LOGW(TAG, "Already initialized");
+    if(s_isInitialized || (NULL != s_pCaptureTimer) || (NULL != s_pTaskHandle) ||
+        (NULL != s_pSignalLossTimer) || (NULL != s_pSampleQueue)) {
+
+        ESP_LOGE(TAG, "RC input cannot initialize while resources are still allocated");
 
         return ESP_ERR_INVALID_STATE;
+    }
+
+    for(uint8_t i = 0; i < RC_CHANNEL_MAX; i++) {
+        if(NULL != s_sChannels[i].pCaptureChannel) {
+            ESP_LOGE(TAG, "RC capture channel %d is still allocated", i);
+
+            return ESP_ERR_INVALID_STATE;
+        }
     }
 
 
@@ -646,3 +863,6 @@ init_failed:
 }
 
 
+void rcInputDeinit(void) {
+    s_cleanup();
+}
