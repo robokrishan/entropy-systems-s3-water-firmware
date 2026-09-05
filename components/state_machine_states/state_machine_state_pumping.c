@@ -2,6 +2,7 @@
 #include "state_machine_global_events.h"
 #include "pump.h"
 #include "esp_log.h"
+#include "nozzle_servo.h"
 
 static const char *TAG = "SM_PUMPING";
 
@@ -9,10 +10,19 @@ static const char *TAG = "SM_PUMPING";
 /* state initialization */
 static esp_err_t s_stateInit(void) {
     esp_err_t lErr = ESP_OK;
+    
+    lErr = nozzleServoDisable();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to disable nozzle servo. Code: 0x%X", lErr);
+        
+        return lErr;
+    }
 
     lErr = pumpOn();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to init state. Code: 0x%X", lErr);
+
+        return lErr;
     }
 
     return lErr;

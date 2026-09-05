@@ -14,15 +14,27 @@ static esp_err_t s_stateInit(void) {
     lErr = nozzleServoRetract();
     if(lErr) {
         ESP_LOGE(TAG, "failed to init state. Code: 0x%X", lErr);
+        
+        return lErr;
+    }
+
+    lErr = nozzleServoEnable();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to enable nozzle servo. Code: 0x%X", lErr);
+        
+        return lErr;
     }
 
     lErr = motionTimeoutStart();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to start motion timeout. Code: 0x%X", lErr);
+
+        nozzleServoDisable();
+
         return lErr;
     }
 
-    return lErr;
+    return ESP_OK;
 }
 
 
@@ -30,10 +42,10 @@ static esp_err_t s_stateInit(void) {
 static esp_err_t s_stateDeinit(void) {
     esp_err_t lErr = ESP_OK;
     esp_err_t lTimeoutErr = ESP_OK;
-
-    lErr = nozzleServoStop();
+    
+    lErr = nozzleServoDisable();
     if(lErr) {
-        ESP_LOGE(TAG, "failed to deinit state. Code: 0x%X", lErr);
+        ESP_LOGE(TAG, "Failed to disable nozzle servo. Code: 0x%X", lErr);
     }
 
     lTimeoutErr = motionTimeoutStop();

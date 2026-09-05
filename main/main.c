@@ -135,7 +135,7 @@ void app_main(void) {
 
     // s_testI2cScan();
 
-    // testNormalSequence();
+    testNormalSequence();
     // testWrongSequence();
     // testFaultSequence();
 
