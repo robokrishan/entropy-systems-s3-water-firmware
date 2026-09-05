@@ -27,6 +27,11 @@ static const char* TAG = "limit_switch";
 static TaskHandle_t s_pTaskHandle = NULL;
 static bool s_isInitialized = false;
 static bool s_isInvalidLimitState = false;
+static bool s_isGpioConfigured = false;
+static bool s_isUpperIsrAdded = false;
+static bool s_isLowerIsrAdded = false;
+static bool s_isShuttingDown = false;
+
 static int s_lUpperStableLevel = LIMIT_SWITCH_RELEASED;
 static int s_lLowerStableLevel = LIMIT_SWITCH_RELEASED;
 
@@ -124,6 +129,12 @@ static void s_processLowerLimit(void) {
 
 /* upper limit interrupt */
 static void IRAM_ATTR s_upperLimitISR(void* pArg) {
+    (void)pArg;
+
+    if(s_isShuttingDown || (NULL == s_pTaskHandle)) {
+        return;
+    }
+
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
     xTaskNotifyFromISR(
@@ -141,6 +152,12 @@ static void IRAM_ATTR s_upperLimitISR(void* pArg) {
 
 /* lower limit interrupt */
 static void IRAM_ATTR s_lowerLimitISR(void* pArg) {
+    (void)pArg;
+
+    if(s_isShuttingDown || (NULL == s_pTaskHandle)) {
+        return;
+    }
+
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
     xTaskNotifyFromISR(
@@ -199,6 +216,11 @@ static void s_limitSwitchTask(void* pArgs) {
             s_processLowerLimit();
         }
     }
+}
+
+
+static void s_cleanup(void) {
+    
 }
 
 
