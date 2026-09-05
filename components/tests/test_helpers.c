@@ -52,7 +52,7 @@ void testPostEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs) {
 }
 
 
-bool testWaitForState(StateMachineStateId_t eExpectedState) {
+bool testWaitForState(StateMachineStateId_t eExpectedState, uint32_t ulTimeoutMs) {
     StateMachineStateId_t eCurrentState = stateMachineGetCurrentState();
     StateMachineStateId_t ePreviousState = eCurrentState;
 

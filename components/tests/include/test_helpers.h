@@ -38,7 +38,7 @@ void testPostEvent(StateMachineEventId_t eEvent, uint32_t ulDelayMs);
  * @return true if the expected state is reached.
  * @return false if FAULT is entered first.
  */
-bool testWaitForState(StateMachineStateId_t eExpectedState);
+bool testWaitForState(StateMachineStateId_t eExpectedState, uint32_t ulTimeoutMs);
 
 
 #endif /* TEST_HELPERS_H */
