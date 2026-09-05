@@ -42,9 +42,6 @@ esp_err_t pumpInit(void) {
 end_init:
 
     if(lErr) {
-        /*
-         * Best-effort cleanup after partial initialization.
-         */
         pumpDeinit();
     }
 
