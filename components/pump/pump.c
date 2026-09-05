@@ -93,3 +93,42 @@ end_pump_off:
 
     return lErr;
 }
+
+
+void pumpDeinit(void) {
+    esp_err_t lErr = ESP_OK;
+
+    /*
+     * Set the output level before configuring the pin as an output.
+     * This minimizes the possibility of an unintended HIGH pulse.
+     */
+    lErr = gpio_set_level(CONFIG_PIN_PUMP, PUMP_OFF);
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to set pump OFF during deinit. Code: 0x%X", lErr);
+    }
+
+    /*
+     * Keep the pump control pin actively driven LOW rather than
+     * leaving the actuator control line floating.
+     */
+    lErr = gpio_set_direction(CONFIG_PIN_PUMP, GPIO_MODE_OUTPUT);
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to configure pump GPIO during deinit. Code: 0x%X", lErr);
+    }
+
+    /*
+     * Try once more after setting the direction. Even if an earlier
+     * operation failed, cleanup must continue.
+     */
+    lErr = gpio_set_level(CONFIG_PIN_PUMP, PUMP_OFF);
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to force pump OFF during deinit. Code: 0x%X", lErr);
+    }
+
+    s_isInitialized = false;
+
+    ESP_LOGI(TAG, "Pump deinitialized");
+}

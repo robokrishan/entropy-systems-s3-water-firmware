@@ -40,4 +40,19 @@ esp_err_t pumpOn(void);
  */
 esp_err_t pumpOff(void);
 
+
+/**
+ * @brief Deinitialize the pump component.
+ *
+ * Forces the pump control GPIO to the safe OFF state and marks the
+ * component as uninitialized.
+ *
+ * Cleanup is best-effort. Any GPIO failures are logged but do not stop
+ * subsequent cleanup operations.
+ *
+ * The function is safe to call if the pump is partially initialized,
+ * already deinitialized, or was never initialized.
+ */
+void pumpDeinit(void);
+
 #endif /* COMPONENTS_PUMP_H_ */
