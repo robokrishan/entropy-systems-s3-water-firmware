@@ -41,6 +41,13 @@ esp_err_t pumpInit(void) {
 
 end_init:
 
+    if(lErr) {
+        /*
+         * Best-effort cleanup after partial initialization.
+         */
+        pumpDeinit();
+    }
+
     return lErr;
 }
 
@@ -50,7 +57,7 @@ esp_err_t pumpOn(void) {
     esp_err_t lErr = ESP_OK;
 
     if(!s_isInitialized) {
-        ESP_LOGE(TAG, "Pump not inititalized");
+        ESP_LOGE(TAG, "Pump not initialized");
         lErr = ESP_ERR_INVALID_STATE;
 
         goto end_pump_on;
@@ -75,7 +82,7 @@ esp_err_t pumpOff(void) {
     esp_err_t lErr = ESP_OK;
 
     if(!s_isInitialized) {
-        ESP_LOGE(TAG, "Pump not inititalized");
+        ESP_LOGE(TAG, "Pump not initialized");
         lErr = ESP_ERR_INVALID_STATE;
 
         goto end_pump_off;
