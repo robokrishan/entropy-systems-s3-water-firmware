@@ -31,11 +31,11 @@ static esp_err_t s_initComponents(void) {
         goto end_component_init;
     }
 
-    // lErr = pumpInit();
-    // if(lErr) {
-    //     ESP_LOGE(TAG, "Failed to init pump. Code: 0x%X", lErr);
-    //     goto end_component_init;
-    // }
+    lErr = pumpInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init pump. Code: 0x%X", lErr);
+        goto end_component_init;
+    }
 
     lErr = stateMachineStatesRegister();
     if(ESP_OK != lErr) {
