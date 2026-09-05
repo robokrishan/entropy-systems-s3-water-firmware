@@ -2,6 +2,7 @@
 #include "driver/mcpwm_prelude.h"
 #include "esp_log.h"
 #include "device_config.h"
+#include "driver/gpio.h"
 
 #define NOZZLE_SERVO_STOP_US            1500
 #define NOZZLE_SERVO_EXTEND_US          1800
@@ -86,6 +87,13 @@ static void s_cleanup(void) {
         mcpwm_del_timer(s_pTimer);
         s_pTimer = NULL;
     }
+
+    // completely release pin
+    gpio_reset_pin(CONFIG_PIN_NOZZLE_SERVO);
+    gpio_set_direction(CONFIG_PIN_NOZZLE_SERVO, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(CONFIG_PIN_NOZZLE_SERVO, GPIO_FLOATING);
+
+    s_isInitialized = false;
 }
 
 
@@ -147,47 +155,47 @@ esp_err_t nozzleServoInit(void) {
     }
 
 
-    // configure pwm generator
-    mcpwm_generator_config_t sGeneratorConfig = {
-        .gen_gpio_num = CONFIG_PIN_NOZZLE_SERVO
-    };
+    // // configure pwm generator
+    // mcpwm_generator_config_t sGeneratorConfig = {
+    //     .gen_gpio_num = CONFIG_PIN_NOZZLE_SERVO
+    // };
 
-    lErr = mcpwm_new_generator(s_pOperator, &sGeneratorConfig, &s_pGenerator);
-    if(lErr) {
-        ESP_LOGE(TAG, "Failed to create MCPWM generator: 0x%X", lErr);
-        goto end_init;
-    }
-
-
-    // define waveform
-    lErr = mcpwm_generator_set_action_on_timer_event(
-        s_pGenerator,
-        MCPWM_GEN_TIMER_EVENT_ACTION(
-            MCPWM_TIMER_DIRECTION_UP,
-            MCPWM_TIMER_EVENT_EMPTY,
-            MCPWM_GEN_ACTION_HIGH
-        )
-    );
-
-    if(lErr) {
-        ESP_LOGE(TAG, "Failed to set generator action on pulse start: 0x%X", lErr);
-        goto end_init;
-    }
+    // lErr = mcpwm_new_generator(s_pOperator, &sGeneratorConfig, &s_pGenerator);
+    // if(lErr) {
+    //     ESP_LOGE(TAG, "Failed to create MCPWM generator: 0x%X", lErr);
+    //     goto end_init;
+    // }
 
 
-    lErr = mcpwm_generator_set_action_on_compare_event(
-        s_pGenerator,
-        MCPWM_GEN_COMPARE_EVENT_ACTION(
-            MCPWM_TIMER_DIRECTION_UP,
-            s_pComparator,
-            MCPWM_GEN_ACTION_LOW
-        )
-    );
+    // // define waveform
+    // lErr = mcpwm_generator_set_action_on_timer_event(
+    //     s_pGenerator,
+    //     MCPWM_GEN_TIMER_EVENT_ACTION(
+    //         MCPWM_TIMER_DIRECTION_UP,
+    //         MCPWM_TIMER_EVENT_EMPTY,
+    //         MCPWM_GEN_ACTION_HIGH
+    //     )
+    // );
 
-    if(lErr) {
-        ESP_LOGE(TAG, "Failed to set generator action on pulse comparator: 0x%X", lErr);
-        goto end_init;
-    }
+    // if(lErr) {
+    //     ESP_LOGE(TAG, "Failed to set generator action on pulse start: 0x%X", lErr);
+    //     goto end_init;
+    // }
+
+
+    // lErr = mcpwm_generator_set_action_on_compare_event(
+    //     s_pGenerator,
+    //     MCPWM_GEN_COMPARE_EVENT_ACTION(
+    //         MCPWM_TIMER_DIRECTION_UP,
+    //         s_pComparator,
+    //         MCPWM_GEN_ACTION_LOW
+    //     )
+    // );
+
+    // if(lErr) {
+    //     ESP_LOGE(TAG, "Failed to set generator action on pulse comparator: 0x%X", lErr);
+    //     goto end_init;
+    // }
 
 
     // set initial pulse to neutral command
@@ -213,6 +221,24 @@ esp_err_t nozzleServoInit(void) {
         goto end_init;
     }
 
+
+    // release the pin
+    gpio_reset_pin(CONFIG_PIN_NOZZLE_SERVO);
+
+    lErr = gpio_set_direction(
+        CONFIG_PIN_NOZZLE_SERVO,
+        GPIO_MODE_INPUT
+    );
+
+    if(lErr) {
+        goto end_init;
+    }
+
+    lErr = gpio_set_pull_mode(CONFIG_PIN_NOZZLE_SERVO, GPIO_FLOATING);
+    if(lErr) {
+        goto end_init;
+    }
+
     s_isInitialized = true;
 
     ESP_LOGI(TAG, "Nozzle servo initialized on pin %d", CONFIG_PIN_NOZZLE_SERVO);
@@ -230,6 +256,7 @@ end_init:
 void nozzleServoDeinit(void) {
     s_cleanup();
 }
+
 
 esp_err_t nozzleServoExtend(void) {
     esp_err_t lErr = ESP_OK;
@@ -271,3 +298,118 @@ esp_err_t nozzleServoStop(void) {
 
     return lErr;
 }
+
+
+esp_err_t nozzleServoDisable(void) {
+    esp_err_t lErr = ESP_OK;
+
+    if(!s_isInitialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if(NULL != s_pGenerator) {
+        lErr = mcpwm_del_generator(s_pGenerator);
+
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to delete pwm generator. Code: 0x%X", lErr);
+
+            return lErr;
+        }
+
+        s_pGenerator = NULL;
+    }
+
+    // release servo signal GPIO
+    gpio_reset_pin(CONFIG_PIN_NOZZLE_SERVO);
+
+    lErr = gpio_set_direction(CONFIG_PIN_NOZZLE_SERVO, GPIO_MODE_INPUT);
+    if(lErr) {
+        return lErr;
+    }
+
+    lErr = gpio_set_pull_mode(CONFIG_PIN_NOZZLE_SERVO, GPIO_FLOATING);
+    if(lErr) {
+        return lErr;
+    }
+
+    ESP_LOGI(TAG, "Nozzle servo pin disabled");
+
+    return ESP_OK;
+}
+
+
+esp_err_t nozzleServoEnable(void) {
+
+    if(!s_isInitialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if(NULL != s_pGenerator) {
+        return ESP_OK;
+    }
+
+    mcpwm_generator_config_t sGeneratorConfig = {
+        .gen_gpio_num = CONFIG_PIN_NOZZLE_SERVO,
+    };
+
+    esp_err_t lErr = mcpwm_new_generator(
+        s_pOperator, 
+        &sGeneratorConfig,
+        &s_pGenerator
+    );
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to create pwm generator. Code: 0x%X", lErr);
+
+        return lErr;
+    }
+
+    // reinstall same generator
+    lErr = mcpwm_generator_set_action_on_timer_event(
+        s_pGenerator,
+        MCPWM_GEN_TIMER_EVENT_ACTION(
+            MCPWM_TIMER_DIRECTION_UP,
+            MCPWM_TIMER_EVENT_EMPTY,
+            MCPWM_GEN_ACTION_HIGH
+        )
+    );
+    
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to configure pwm timer action. Code: 0x%X", lErr);
+        
+        goto enable_fail;
+    }
+
+    lErr = mcpwm_generator_set_action_on_compare_event(
+        s_pGenerator,
+        MCPWM_GEN_COMPARE_EVENT_ACTION(
+            MCPWM_TIMER_DIRECTION_UP,
+            s_pComparator,
+            MCPWM_GEN_ACTION_LOW
+        )
+    );
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to configure pwm compare action. Code: 0x%X", lErr);
+        
+        goto enable_fail;
+    }
+
+    ESP_LOGI(TAG, "Nozzle servo pin enabled");
+
+    return ESP_OK;
+
+enable_fail:
+
+    if(NULL != s_pGenerator) {
+        mcpwm_del_generator(s_pGenerator);
+        s_pGenerator = NULL;
+    }
+
+    gpio_reset_pin(CONFIG_PIN_NOZZLE_SERVO);
+
+    return lErr;
+}
+
+
+
