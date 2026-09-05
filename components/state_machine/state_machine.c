@@ -22,6 +22,7 @@ static StateMachineStateId_t s_eCurrentState = STATE_MACHINE_STATE_MAX;
 static StateMachineStateId_t s_ePrevState = STATE_MACHINE_STATE_MAX;
 static StateMachineStateId_t s_eFailureState = STATE_MACHINE_STATE_MAX;
 static StateMachineState_t* s_pStates[STATE_MACHINE_STATE_MAX] = {0};
+static TaskHandle_t s_pTaskHandle = NULL;
 
 
 /* Static Functions */
@@ -325,12 +326,13 @@ esp_err_t stateMachineInit(void) {
         SM_TASK_STACK,
         NULL,
         SM_TASK_PRIORITY,
-        NULL
+        &s_pTaskHandle
     );
 
-    if (pdPASS != ubResult) {
+    if(pdPASS != ubResult) {
         ESP_LOGE(TAG, "Failed to create state machine task");
 
+        s_pTaskHandle = NULL;
         lErr = ESP_ERR_NO_MEM;
 
         goto cleanup_state;
@@ -345,13 +347,23 @@ esp_err_t stateMachineInit(void) {
 cleanup_state:
 
     if(NULL != pInitState->cbDeinit) {
-        pInitState->cbDeinit();
+        esp_err_t lCleanupErr = pInitState->cbDeinit();
+
+        if(lCleanupErr) {
+            ESP_LOGE(
+                TAG,
+                "Failed to deinit initial state during cleanup. Code: 0x%X",
+                lCleanupErr
+            );
+        }
     }
 
 cleanup_queue:
 
-    vQueueDelete(s_pQueue);
-    s_pQueue = NULL;
+    if(NULL != s_pQueue) {
+        vQueueDelete(s_pQueue);
+        s_pQueue = NULL;
+    }
 
 end_sm_init:
 
@@ -502,3 +514,86 @@ end_fail_state_reg:
 
     return lErr;
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Deinitialization                                                           */
+/* -------------------------------------------------------------------------- */
+
+void stateMachineDeinit(void) {
+    esp_err_t lErr = ESP_OK;
+
+    /*
+     * Record whether the state machine was actually running.
+     *
+     * Registered states may exist even if stateMachineInit() was never
+     * successfully completed, so we should only invoke the current state's
+     * deinit callback if the state machine task was successfully created.
+     */
+    bool bWasRunning = (NULL != s_pTaskHandle);
+
+
+    /*
+     * Stop state-machine processing first so that no further events can
+     * modify state while cleanup is in progress.
+     */
+    if(NULL != s_pTaskHandle) {
+        vTaskDelete(s_pTaskHandle);
+        s_pTaskHandle = NULL;
+    }
+
+
+    /*
+     * Deinitialize the currently active state.
+     *
+     * Do not stop cleanup if the callback fails.
+     */
+    if(bWasRunning) {
+        StateMachineState_t* pCurrentState = s_getState(s_eCurrentState);
+
+        if((NULL != pCurrentState) && (NULL != pCurrentState->cbDeinit)) {
+            lErr = pCurrentState->cbDeinit();
+
+            if(lErr) {
+                ESP_LOGE(
+                    TAG,
+                    "Failed to deinit state %s during state machine cleanup. Code: 0x%X",
+                    stateMachineStateName(s_eCurrentState),
+                    lErr
+                );
+            }
+        }
+    }
+
+
+    /*
+     * Delete the event queue.
+     */
+    if(NULL != s_pQueue) {
+        vQueueDelete(s_pQueue);
+        s_pQueue = NULL;
+    }
+
+
+    /*
+     * Remove all registered states so that the state table can be
+     * populated again during a subsequent initialization.
+     */
+    for(uint32_t ulIndex = 0;
+        ulIndex < (uint32_t)STATE_MACHINE_STATE_MAX;
+        ulIndex++) {
+
+        s_pStates[ulIndex] = NULL;
+    }
+
+
+    /*
+     * Reset state-machine bookkeeping.
+     */
+    s_eCurrentState = STATE_MACHINE_STATE_MAX;
+    s_ePrevState = STATE_MACHINE_STATE_MAX;
+    s_eFailureState = STATE_MACHINE_STATE_MAX;
+
+    ESP_LOGI(TAG, "State machine deinitialized");
+}
+

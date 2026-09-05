@@ -42,4 +42,20 @@ StateMachineStateId_t stateMachineGetCurrentState(void);
 
 esp_err_t stateMachineSetFailureState(StateMachineStateId_t eState);
 
+
+/**
+ * @brief Deinitialize the state machine.
+ *
+ * Stops the state-machine task, deinitializes the active state, deletes
+ * the event queue, clears registered states, and resets internal state
+ * tracking.
+ *
+ * Cleanup is best-effort. A failure while deinitializing the active state
+ * is logged but does not prevent the remaining resources from being released.
+ *
+ * The function is safe to call when the state machine is partially
+ * initialized or already deinitialized.
+ */
+void stateMachineDeinit(void);
+
 #endif /* COMPONENTS_STATE_MACHINE_H_ */
