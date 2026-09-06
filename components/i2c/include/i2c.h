@@ -32,4 +32,28 @@ esp_err_t i2cBusWriteRead(
     size_t ulReadSize
 );
 
+
+/**
+ * @brief Remove a device from the I2C master bus.
+ *
+ * Removes the specified device handle from the initialized I2C bus.
+ *
+ * @param pDeviceHandle I2C device handle to remove.
+ *
+ * @return ESP_OK on success, otherwise an appropriate error code.
+ */
+esp_err_t i2cBusRemoveDevice(i2c_master_dev_handle_t pDeviceHandle);
+
+
+/**
+ * @brief Deinitialize the I2C master bus.
+ *
+ * Deletes the I2C master bus and releases its associated resources.
+ * All devices must be removed from the bus before this function is called.
+ *
+ * Cleanup is null-safe. If bus deletion fails, the bus handle and
+ * initialization state are retained so cleanup can be attempted again.
+ */
+void i2cBusDeinit(void);
+
 #endif /* COMPONENTS_I2C_H_ */

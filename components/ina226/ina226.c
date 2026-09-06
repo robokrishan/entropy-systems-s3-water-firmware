@@ -112,11 +112,30 @@ static esp_err_t s_writeRegister(uint8_t ubRegister, uint16_t uwValue) {
 }
 
 
+static void s_cleanup(void) {
+    esp_err_t lErr = ESP_OK;
+
+    s_isInitialized = false;
+
+    if(NULL != s_pDeviceHandle) {
+        lErr = i2cBusRemoveDevice(s_pDeviceHandle);
+
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to remove INA226 from I2C bus. Code: 0x%X", lErr);
+        } else {
+            s_pDeviceHandle = NULL;
+        }
+    }
+
+    ESP_LOGI(TAG, "INA226 cleanup complete");
+}
+
+
 esp_err_t ina226Init(void) {
     esp_err_t lErr = ESP_OK;
 
-    if(s_isInitialized) {
-        ESP_LOGW(TAG, "Already initialized");
+    if(s_isInitialized || (NULL != s_pDeviceHandle)) {
+        ESP_LOGW(TAG, "INA226 cannot initialize while resources still allocated");
 
         return ESP_ERR_INVALID_STATE;
     }
@@ -130,14 +149,14 @@ esp_err_t ina226Init(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to add INA226 to I2C bus. Code: 0x%X", lErr);
 
-        return lErr;
+        goto init_failed;
     }
 
     uint16_t uwManufacturerId = 0;
 
     lErr = s_readRegister(INA226_REG_MANUFACTURER_ID, &uwManufacturerId);
     if(lErr) {
-        return lErr;
+        goto init_failed;
     }
 
     ESP_LOGI(TAG, "Manufacturer ID: 0x%04X", uwManufacturerId);
@@ -151,7 +170,7 @@ esp_err_t ina226Init(void) {
 
     lErr = s_readRegister(INA226_REG_DIE_ID, &uwDieId);
     if(lErr) {
-        return lErr;
+        goto init_failed;
     }
 
     ESP_LOGI(TAG, "Die ID: 0x%04X", uwDieId);
@@ -160,50 +179,43 @@ esp_err_t ina226Init(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to configure calibration register. Code: 0x%X", lErr);
 
-        return lErr;
+        goto init_failed;
     }
 
     // check calibration register
     uint16_t uwCalibration = 0;
 
-    lErr = s_readRegister(
-        INA226_REG_CALIBRATION,
-        &uwCalibration
-    );
-
+    lErr = s_readRegister(INA226_REG_CALIBRATION, &uwCalibration);
     if(lErr) {
-        return lErr;
+        goto init_failed;
     }
 
-    ESP_LOGI(
-        TAG,
-        "Calibration register: 0x%04X",
-        uwCalibration
-    );
+    ESP_LOGI(TAG, "Calibration register: 0x%04X", uwCalibration);
 
     // check configuration register
     uint16_t uwConfig = 0;
 
-    lErr = s_readRegister(
-        INA226_REG_CONFIGURATION,
-        &uwConfig
-    );
+    lErr = s_readRegister(INA226_REG_CONFIGURATION, &uwConfig);
 
     if(lErr) {
-        return lErr;
+        goto init_failed;
     }
 
-    ESP_LOGI(
-        TAG,
-        "Configuration register: 0x%04X",
-        uwConfig
-    );
+    ESP_LOGI(TAG, "Configuration register: 0x%04X", uwConfig);
 
     s_isInitialized = true;
 
     ESP_LOGI(TAG, "INA226 initialized");
 
     return ESP_OK;
+
+init_failed:
+
+    ESP_LOGE(TAG, "Failed to initialize INA226. Code: 0x%X", lErr);
+
+    s_cleanup();
+
+    return lErr;
 }
 
 
@@ -318,4 +330,9 @@ esp_err_t ina226ReadPower(float* pPowerW) {
     *pPowerW = (float)uwRawPower * INA226_POWER_LSB_W;
 
     return lErr;
+}
+
+
+void ina226Deinit(void) {
+    s_cleanup();
 }

@@ -75,4 +75,17 @@ esp_err_t ina226ReadShuntVoltage(float* pShuntV);
  */
 esp_err_t ina226ReadPower(float* pPowerW);
 
+
+/**
+ * @brief Deinitialize the INA226 component.
+ *
+ * Removes the INA226 device from the shared I2C bus and resets the
+ * component's internal state.
+ *
+ * Cleanup is null-safe and best-effort. If device removal fails, the
+ * failure is logged and the device handle is retained for a later
+ * cleanup attempt.
+ */
+void ina226Deinit(void);
+
 #endif /* COMPONENTS_INA226_H_ */

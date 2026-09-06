@@ -21,6 +21,12 @@ esp_err_t i2cBusInit(void) {
         return lErr;
     }
 
+    if(NULL != s_pBusHandle) {
+        ESP_LOGE(TAG, "I2C bus cannot initialize while bus handle is still allocated");
+
+        return ESP_ERR_INVALID_STATE;
+    }
+
     i2c_master_bus_config_t sBusConfig = {
         .i2c_port = I2C_PORT,
         .sda_io_num = CONFIG_PIN_I2C_SDA,
@@ -43,7 +49,6 @@ esp_err_t i2cBusInit(void) {
 
     return ESP_OK;
 }
-
 
 
 esp_err_t i2cBusAddDevice(
@@ -180,3 +185,53 @@ esp_err_t i2cBusWriteRead(
     return lErr;
 }
 
+
+esp_err_t i2cBusRemoveDevice(i2c_master_dev_handle_t pDeviceHandle) {
+    if(!s_isInitialized) {
+        ESP_LOGE(TAG, "I2C bus not initialized");
+
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if(NULL == pDeviceHandle) {
+        ESP_LOGE(TAG, "Invalid device handle");
+
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t lErr = i2c_master_bus_rm_device(pDeviceHandle);
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to remove I2C device. Code: 0x%X", lErr);
+
+        return lErr;
+    }
+
+    ESP_LOGI(TAG, "I2C device removed");
+
+    return ESP_OK;
+}
+
+
+void i2cBusDeinit(void) {
+    esp_err_t lErr = ESP_OK;
+
+    if(NULL == s_pBusHandle) {
+        s_isInitialized = false;
+
+        return;
+    }
+
+    lErr = i2c_del_master_bus(s_pBusHandle);
+
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to delete I2C bus. Code: 0x%X", lErr);
+
+        return;
+    }
+
+    s_pBusHandle = NULL;
+    s_isInitialized = false;
+
+    ESP_LOGI(TAG, "I2C bus cleanup complete");
+}
