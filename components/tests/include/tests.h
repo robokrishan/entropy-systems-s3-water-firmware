@@ -97,6 +97,16 @@ void testNozzleServoSequence(void);
 void testNozzleServoNeutral(void);
 
 
+/**
+ * @brief Test basic pump driver operation.
+ *
+ * Initializes the pump component, verifies that it starts in the OFF state,
+ * commands the pump ON for a short period, then turns it OFF again.
+ *
+ * The pump component is deinitialized before the test exits, ensuring the
+ * output is returned to a safe OFF state even if an intermediate operation
+ * fails.
+ */
 void testPumpSequence(void);
 
 
