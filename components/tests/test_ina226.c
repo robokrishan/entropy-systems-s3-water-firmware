@@ -31,7 +31,7 @@ void testIna226Basic(void) {
     } else {
         ESP_LOGE(TAG, "I2C bus initialization FAILED. Code: 0x%X", lErr);
 
-        goto test_complete;
+        goto test_cleanup;
     }
 
     /* ============================================================
@@ -46,17 +46,18 @@ void testIna226Basic(void) {
     } else {
         ESP_LOGE(TAG, "INA226 initialization FAILED. Code: 0x%X",lErr);
 
-        goto test_complete;
+        goto test_cleanup;
     }
 
 
     /* ============================================================
-     * TEST 3: BUS VOLTAGE REGISTER READ
-     * ============================================================ */
+    * TEST 3-6: INA226 MEASUREMENT READS
+    * ============================================================ */
 
     float fBusVoltage = 0.0f;
     float fShuntVoltage = 0.0f;
     float fCurrent = 0.0f;
+    float fPower = 0;
 
     lErr = ina226ReadBusVoltage(&fBusVoltage);
     if(ESP_OK == lErr) {
@@ -85,17 +86,17 @@ void testIna226Basic(void) {
         ESP_LOGE(TAG, "Failed to read current. Code: 0x%X", lErr);
     }
 
-    float fPower = 0;
 
     lErr = ina226ReadPower(&fPower);
     if(ESP_OK == lErr) {
-        ESP_LOGI(TAG, "Power: %.6f A", fPower);
+        ESP_LOGI(TAG, "Power: %.6f W", fPower);
         ubTestPassCount++;
     } else {
         ESP_LOGE(TAG, "Failed to read power. Code: 0x%X", lErr);
     }
 
-test_complete:
+    
+test_cleanup:
 
     ESP_LOGW(TAG, "========================================");
 
@@ -111,5 +112,10 @@ test_complete:
         );
     }
 
+    ina226Deinit();
+    i2cBusDeinit();
+
     ESP_LOGW(TAG, "========================================");
 }
+
+
