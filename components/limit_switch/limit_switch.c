@@ -219,8 +219,85 @@ static void s_limitSwitchTask(void* pArgs) {
 }
 
 
+/* cleanup sequence */
 static void s_cleanup(void) {
-    
+    esp_err_t lErr = ESP_OK;
+
+    s_isShuttingDown = true;
+    s_isInitialized = false;
+
+    // disable gpio interrupts
+    if(s_isGpioConfigured) {
+        lErr = gpio_intr_disable(CONFIG_PIN_UPPER_LIMIT);
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to disable upper limit interrupt. Code: 0x%X", lErr);
+        }
+
+        lErr = gpio_intr_disable(CONFIG_PIN_LOWER_LIMIT);
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to disable lower limit interrupt. Code: 0x%X", lErr);
+        }
+    }
+
+
+    // remove ISR handlers before deleting the corresponding task
+    if(s_isUpperIsrAdded) {
+        lErr = gpio_isr_handler_remove(CONFIG_PIN_UPPER_LIMIT);
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to remove upper limit ISR. Code: 0x%X", lErr);
+        }else {
+            s_isUpperIsrAdded = false;
+        }
+    }
+
+    if(s_isLowerIsrAdded) {
+        lErr = gpio_isr_handler_remove(CONFIG_PIN_LOWER_LIMIT);
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to remove lower limit ISR. Code: 0x%X", lErr);
+        } else {
+            s_isLowerIsrAdded = false;
+        }
+    }
+
+
+    // delete switch debounce task
+    if(NULL != s_pTaskHandle) {
+        vTaskDelete(s_pTaskHandle);
+        s_pTaskHandle = NULL;
+    }
+
+
+    // reset gpio pins
+    if(s_isGpioConfigured) {
+        bool isResetSuccessful = true;
+
+        lErr = gpio_reset_pin(CONFIG_PIN_UPPER_LIMIT);
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to reset upper limit GPIO. Code: 0x%X", lErr);
+
+            isResetSuccessful = false;
+        }
+
+        lErr = gpio_reset_pin(CONFIG_PIN_LOWER_LIMIT);
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to reset lower limit GPIO. Code: 0x%X", lErr);
+
+            isResetSuccessful = false;
+        }
+
+        if(isResetSuccessful) {
+            s_isGpioConfigured = false;
+        }
+    }
+
+
+    s_isInvalidLimitState = false;
+    s_lUpperStableLevel = LIMIT_SWITCH_RELEASED;
+    s_lLowerStableLevel = LIMIT_SWITCH_RELEASED;
+
+    s_isShuttingDown = false;
+
+    ESP_LOGI(TAG, "Limit switch cleanup complete");
 }
 
 
@@ -228,11 +305,14 @@ static void s_cleanup(void) {
 esp_err_t limitSwitchInit(void) {
     esp_err_t lErr = ESP_OK;
 
-    if(s_isInitialized) {
-        ESP_LOGW(TAG, "Limit switches already initialized");
-        lErr = ESP_ERR_INVALID_STATE;
+    if(s_isInitialized || (NULL != s_pTaskHandle) || s_isUpperIsrAdded ||
+        s_isLowerIsrAdded || s_isGpioConfigured) {
 
-        goto end_init;
+        ESP_LOGE(TAG,
+            "Limit switches cannot initialize while resources are still allocated"
+        );
+
+        return ESP_ERR_INVALID_STATE;
     }
 
 
@@ -252,6 +332,7 @@ esp_err_t limitSwitchInit(void) {
         goto end_init;
     }
 
+    s_isGpioConfigured = true;
 
     // record switch state at startup
     s_lUpperStableLevel = gpio_get_level(CONFIG_PIN_UPPER_LIMIT);
@@ -284,9 +365,6 @@ esp_err_t limitSwitchInit(void) {
     if((ESP_OK != lErr) && (ESP_ERR_INVALID_STATE != lErr)) {
         ESP_LOGE(TAG, "Failed to install GPIO ISR service. Code: 0x%X", lErr);
 
-        vTaskDelete(s_pTaskHandle);
-        s_pTaskHandle = NULL;
-
         goto end_init;
     }
 
@@ -294,25 +372,20 @@ esp_err_t limitSwitchInit(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to add upper limit ISR. Code: 0x%X", lErr);
 
-        vTaskDelete(s_pTaskHandle);
-        s_pTaskHandle = NULL;
-
         goto end_init;
     }
+
+    s_isUpperIsrAdded = true;
 
 
     lErr = gpio_isr_handler_add(CONFIG_PIN_LOWER_LIMIT, s_lowerLimitISR, NULL);
     if(lErr) {
         ESP_LOGE(TAG, "Failed to add lower limit ISR. Code: 0x%X", lErr);
 
-        gpio_isr_handler_remove(CONFIG_PIN_UPPER_LIMIT);
-
-        vTaskDelete(s_pTaskHandle);
-        s_pTaskHandle = NULL;
-
         goto end_init;
     }
 
+    s_isLowerIsrAdded = true;
     s_isInitialized = true;
 
     ESP_LOGI(TAG, "Limit switches initialized. Upper: %d | Lower: %d",
@@ -320,7 +393,13 @@ esp_err_t limitSwitchInit(void) {
         s_lLowerStableLevel
     );
 
+    return ESP_OK;
+
 end_init:
+
+    ESP_LOGE(TAG, "Failed to initialize limit switches. Code: 0x%X", lErr);
+
+    s_cleanup();
 
     return lErr;
 }
@@ -349,17 +428,22 @@ esp_err_t limitSwitchSyncState(void) {
         (LIMIT_SWITCH_ACTIVE == lLowerLevel)) {
             ESP_LOGE(TAG, "Invalid limit state: both switches active");
             
+            s_isInvalidLimitState = true;
             lErr = s_postFaultEvent();
-    } else if(LIMIT_SWITCH_ACTIVE == lUpperLevel) {
-        ESP_LOGI(TAG, "Initial position: upper limit active");
-
-        lErr = stateMachinePostEvent(SM_EVENT_UPPER_LIMIT_ACTIVE);
-    } else if(LIMIT_SWITCH_ACTIVE == lLowerLevel) {
-        ESP_LOGI(TAG, "Initial position: lower limit active");
-
-        lErr = stateMachinePostEvent(SM_EVENT_LOWER_LIMIT_ACTIVE);
     } else {
-        ESP_LOGI(TAG, "Initial position unknown");
+        s_isInvalidLimitState = false;
+
+        if(LIMIT_SWITCH_ACTIVE == lUpperLevel) {
+            ESP_LOGI(TAG, "Initial position: upper limit active");
+
+            lErr = stateMachinePostEvent(SM_EVENT_UPPER_LIMIT_ACTIVE);
+        } else if(LIMIT_SWITCH_ACTIVE == lLowerLevel) {
+            ESP_LOGI(TAG, "Initial position: lower limit active");
+
+            lErr = stateMachinePostEvent(SM_EVENT_LOWER_LIMIT_ACTIVE);
+        } else {
+            ESP_LOGI(TAG, "Initial position unknown");
+        }
     }
 
     if(lErr) {
@@ -369,5 +453,10 @@ esp_err_t limitSwitchSyncState(void) {
 end_sync:
 
     return lErr;
+}
+
+
+void limitSwitchDeinit(void) {
+    s_cleanup();
 }
 

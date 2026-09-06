@@ -3,4 +3,4 @@ idf_component_register(SRCS "test_diagnostics.c" "test_helpers.c" "test_ssd1306.
                     REQUIRES state_machine_common 
                             state_machine nozzle_servo pump
                             limit_switch motion_timeout ina226
-                            i2c ssd1306)
+                            i2c ssd1306 rc_input state_machine_states)

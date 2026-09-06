@@ -37,4 +37,16 @@ esp_err_t limitSwitchInit(void);
 esp_err_t limitSwitchSyncState(void);
 
 
+/**
+ * @brief Deinitialize the limit switch component.
+ *
+ * Disables limit switch interrupts, removes the registered GPIO ISR handlers,
+ * deletes the debounce task, resets the limit switch GPIOs, and clears
+ * internal state.
+ *
+ * Cleanup is best-effort and null-safe. Failures are logged without
+ * preventing the remaining resources from being cleaned up.
+ */
+void limitSwitchDeinit(void);
+
 #endif /* COMPONENTS_LIMIT_SWITCH_H_ */

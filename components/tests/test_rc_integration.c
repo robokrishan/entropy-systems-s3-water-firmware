@@ -64,7 +64,7 @@ static esp_err_t s_testBaseInit(void) {
         goto init_fail;
     }
 
-    lErr = stateMachineStatesInit();
+    lErr = stateMachineStatesRegister();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to register states! Code: 0x%X", lErr);
         goto init_fail;
@@ -465,6 +465,12 @@ void testRcNozzleIntegrationSequence(void) {
         goto test_cleanup;
     }
 
+    lErr = limitSwitchSyncState();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to sync limit switch state. Code: 0x%X", lErr);
+        
+        goto test_cleanup;
+    }
 
     /* ============================================================
      * INITIAL STATE
