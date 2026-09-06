@@ -130,10 +130,29 @@ static esp_err_t s_setRow(uint8_t ubRow) {
 }
 
 
+static void s_cleanup(void) {
+    esp_err_t lErr = ESP_OK;
+
+    s_isInitialized = false;
+
+    if(NULL != s_pDeviceHandle) {
+        lErr = i2cBusRemoveDevice(s_pDeviceHandle);
+
+        if(lErr) {
+            ESP_LOGE(TAG, "Failed to remove SSD1306 from I2C bus. Code: 0x%X", lErr);
+        } else {
+            s_pDeviceHandle = NULL;
+        }
+    }
+
+    ESP_LOGI(TAG, "SSD1306 cleanup complete");
+}
+
+
 /*      Public API      */
 esp_err_t ssd1306Init(void) {
-    if(s_isInitialized) {
-        ESP_LOGW(TAG, "OLED already initialized!");
+    if(s_isInitialized || (NULL != s_pDeviceHandle)) {
+        ESP_LOGW(TAG, "SSD1306 cannot be initialized while resources are still allocated");
 
         return ESP_ERR_INVALID_STATE;
     }
@@ -142,7 +161,7 @@ esp_err_t ssd1306Init(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to add SSD1306 to I2C bus. Code: 0x%X", lErr);
 
-        return lErr;
+        goto init_failed;
     }
 
     // initialization sequence
@@ -176,12 +195,12 @@ esp_err_t ssd1306Init(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to configure SSD1306. Code: 0x%X", lErr);
 
-        return lErr;
+        goto init_failed;
     }
 
     lErr = s_clearDisplay();
     if(lErr) {
-        return lErr;
+        goto init_failed;
     }
 
     const uint8_t ubDisplayOn = 0xAF;
@@ -190,7 +209,7 @@ esp_err_t ssd1306Init(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to enable display. Code: 0x%X", lErr);
 
-        return lErr;
+        goto init_failed;
     }
 
     s_isInitialized = true;
@@ -198,13 +217,21 @@ esp_err_t ssd1306Init(void) {
     ESP_LOGI(TAG, "SSD1306 initialized");
 
     return ESP_OK;
+
+init_failed:
+
+    ESP_LOGE(TAG, "Failed to initialize SSD1306. Code: 0x%X", lErr);
+
+    s_cleanup();
+
+    return lErr;
 }
 
 
 esp_err_t ssd1306Clear(void) {
     if(!s_isInitialized) {
         ESP_LOGW(TAG, "Already initialized!");
-        // return ESP_ERR_INVALID_STATE;
+        return ESP_ERR_INVALID_STATE;
     }
 
     return s_clearDisplay();
@@ -267,4 +294,9 @@ esp_err_t ssd1306WriteText(uint8_t ubRow, const char* pText) {
     }
 
     return ESP_OK;
+}
+
+
+void ssd1306Deinit(void) {
+    s_cleanup();
 }

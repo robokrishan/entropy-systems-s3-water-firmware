@@ -58,4 +58,17 @@ esp_err_t ssd1306Clear(void);
  */
 esp_err_t ssd1306WriteText(uint8_t ubRow, const char* pText);
 
+
+/**
+ * @brief Deinitialize the SSD1306 display component.
+ *
+ * Removes the SSD1306 device from the shared I2C bus and resets the
+ * component's internal state.
+ *
+ * Cleanup is null-safe and best-effort. If device removal fails, the
+ * failure is logged and the device handle is retained for a later
+ * cleanup attempt.
+ */
+void ssd1306Deinit(void);
+
 #endif /* COMPONENTS_SSD1306_H_ */
