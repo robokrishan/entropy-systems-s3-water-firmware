@@ -1,5 +1,9 @@
 #include "driver/gpio.h"
 
+
+#define CONFIG_FIRMWARE_VERSION         "1.0.0"
+
+
 #define CONFIG_PIN_NOZZLE_SERVO         GPIO_NUM_7
 #define CONFIG_PIN_PUMP                 GPIO_NUM_6
 #define CONFIG_PIN_UPPER_LIMIT          GPIO_NUM_1
