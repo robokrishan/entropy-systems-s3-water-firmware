@@ -1,27 +1,109 @@
 #include "tests.h"
+#include "test_helpers.h"
+
+#include <stdint.h>
+
 #include "esp_log.h"
 #include "esp_err.h"
 
-#include "state_machine.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "nozzle_servo.h"
+#include "pump.h"
 #include "motion_timeout.h"
+#include "limit_switch.h"
+
+#include "state_machine.h"
+#include "state_machine_common.h"
+#include "state_machine_states.h"
 
 
-static const char* TAG = "TEST_LIMIT_SWITCH";
+static const char* TAG = "TEST_MOTION_TIMEOUT";
 
+
+static void s_testBaseDeinit(void) {
+    stateMachineDeinit();
+    motionTimeoutDeinit();
+    pumpDeinit();
+    nozzleServoDeinit();
+}
+
+
+static esp_err_t s_testBaseInit(void) {
+    esp_err_t lErr = ESP_OK;
+
+    lErr = nozzleServoInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init nozzle servo. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    lErr = pumpInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init pump. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    lErr = motionTimeoutInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init motion timeout. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    lErr = stateMachineStatesRegister();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to register states. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    lErr = stateMachineInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init state machine. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    return ESP_OK;
+
+init_fail:
+
+    s_testBaseDeinit();
+
+    return lErr;
+}
 
 
 void testMotionTimeoutSequence(void) {
+    esp_err_t lErr = ESP_OK;
+
+    lErr = s_testBaseInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init test components. Code: 0x%X", lErr);
+
+        return;
+    }
+
     uint8_t ubTestPassCount = 0;
     const uint8_t ubTestCount = 7;
-
-    esp_err_t lErr = ESP_OK;
 
     ESP_LOGW(TAG, "=== TEST: MOTION TIMEOUT SEQUENCE ===");
 
     /*
+    *   complete the state machine startup
+    *   
+    *   INIT -> POSITION_UNKNOWN
+    */
+    testPostEvent(SM_EVENT_SYSTEM_READY, 500);
+
+    /*
      * Test starts in POSITION_UNKNOWN.
      */
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
     /*
      * TEST 1:
@@ -36,10 +118,10 @@ void testMotionTimeoutSequence(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to start motion timeout. Code: 0x%X", lErr);
 
-        return;
+        goto test_cleanup;
     }
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
     /*
      * Timeout is 10 seconds.
@@ -47,15 +129,15 @@ void testMotionTimeoutSequence(void) {
      */
     vTaskDelay(pdMS_TO_TICKS(11000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+    ubTestPassCount += testCheckState(STATE_MACHINE_FAULT);
 
 
     /*
      * Recover from FAULT.
      */
-    s_postTestEvent(SM_EVENT_RESET, 500);
+    testPostEvent(SM_EVENT_RESET, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     /*
@@ -71,7 +153,7 @@ void testMotionTimeoutSequence(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to start motion timeout. Code: 0x%X", lErr);
 
-        return;
+        goto test_cleanup;
     }
 
     vTaskDelay(pdMS_TO_TICKS(3000));
@@ -80,7 +162,7 @@ void testMotionTimeoutSequence(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to stop motion timeout. Code: 0x%X", lErr);
 
-        return;
+        goto test_cleanup;
     }
 
     /*
@@ -89,7 +171,7 @@ void testMotionTimeoutSequence(void) {
      */
     vTaskDelay(pdMS_TO_TICKS(11000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     /*
@@ -103,7 +185,7 @@ void testMotionTimeoutSequence(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to start motion timeout. Code: 0x%X", lErr);
 
-        return;
+        goto test_cleanup;
     }
 
     /*
@@ -121,7 +203,7 @@ void testMotionTimeoutSequence(void) {
     if(lErr) {
         ESP_LOGE(TAG, "Failed to restart motion timeout. Code: 0x%X", lErr);
 
-        return;
+        goto test_cleanup;
     }
 
     /*
@@ -133,7 +215,7 @@ void testMotionTimeoutSequence(void) {
      */
     vTaskDelay(pdMS_TO_TICKS(8000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     /*
@@ -144,7 +226,7 @@ void testMotionTimeoutSequence(void) {
      */
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+    ubTestPassCount += testCheckState(STATE_MACHINE_FAULT);
 
 
     if(ubTestPassCount == ubTestCount) {
@@ -159,23 +241,56 @@ void testMotionTimeoutSequence(void) {
         );
     }
 
+test_cleanup:
+
+    s_testBaseDeinit();
+
     ESP_LOGW(TAG, "=== END MOTION TIMEOUT TEST ===");
 }
 
 
 void testMotionTimeoutIntegrationSequence(void) {
+    esp_err_t lErr = s_testBaseInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init test components. Code: 0x%X", lErr);
+
+        return;
+    }
     uint8_t ubTestPassCount = 0;
     const uint8_t ubTestCount = 16;
 
     ESP_LOGW(TAG, "=== TEST: MOTION TIMEOUT INTEGRATION ===");
     ESP_LOGW(TAG, "Ensure BOTH limit switches are RELEASED");
+
     vTaskDelay(pdMS_TO_TICKS(3000));
 
+    /*
+    * Complete FSM startup before enabling the external
+    * limit-switch event source.
+    *
+    * INIT -> POSITION_UNKNOWN
+    */
+    testPostEvent(SM_EVENT_SYSTEM_READY, 500);
+
+    // initialize limit switches
+    lErr = limitSwitchInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init limit switches. Code: 0x%X", lErr);
+
+        goto test_cleanup;
+    }
+
+    lErr = limitSwitchSyncState();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to sync limit switches. Code: 0x%X", lErr);
+
+        goto test_cleanup;
+    }
 
     /*
      * Test should begin in POSITION_UNKNOWN.
      */
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     /* ============================================================
@@ -189,13 +304,13 @@ void testMotionTimeoutIntegrationSequence(void) {
     /*
      * POSITION_UNKNOWN + UPPER_LIMIT_ACTIVE -> STOWED
      */
-    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_STOWED);
 
 
     ESP_LOGW(TAG, "RELEASE UPPER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_STOWED);
 
 
     /*
@@ -205,9 +320,9 @@ void testMotionTimeoutIntegrationSequence(void) {
      *   - start servo extension
      *   - start motion timeout
      */
-    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 500);
+    testPostEvent(SM_EVENT_NOZZLE_EXTEND, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
+    ubTestPassCount += testCheckState(STATE_MACHINE_LOWERING);
 
 
     /*
@@ -220,27 +335,27 @@ void testMotionTimeoutIntegrationSequence(void) {
     vTaskDelay(pdMS_TO_TICKS(11000));
 
     /*
-     * Expected:
-     *
-     * motion timeout expires
-     *      ↓
-     * SM_EVENT_FAULT
-     *      ↓
-     * LOWERING.cbDeinit()
-     *      ├── servo stop
-     *      └── timeout stop
-     *      ↓
-     * FAULT
-     */
-    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+    * Expected:
+    *
+    * motion timeout expires
+    *      ↓
+    * SM_EVENT_FAULT
+    *      ↓
+    * LOWERING.cbDeinit()
+    *      ├── disable servo PWM output
+    *      └── stop motion timeout
+    *      ↓
+    * FAULT
+    */
+    ubTestPassCount += testCheckState(STATE_MACHINE_FAULT);
 
 
     /*
      * Recover.
      */
-    s_postTestEvent(SM_EVENT_RESET, 500);
+    testPostEvent(SM_EVENT_RESET, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     /* ============================================================
@@ -255,13 +370,13 @@ void testMotionTimeoutIntegrationSequence(void) {
     /*
      * POSITION_UNKNOWN + LOWER_LIMIT_ACTIVE -> DEPLOYED
      */
-    ubTestPassCount +=s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_DEPLOYED);
 
 
     ESP_LOGW(TAG, "RELEASE LOWER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_DEPLOYED);
 
 
     /*
@@ -271,9 +386,9 @@ void testMotionTimeoutIntegrationSequence(void) {
      *   - start servo retraction
      *   - start motion timeout
      */
-    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 500);
+    testPostEvent(SM_EVENT_NOZZLE_RETRACT, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
+    ubTestPassCount += testCheckState(STATE_MACHINE_RAISING);
 
 
     /*
@@ -283,15 +398,15 @@ void testMotionTimeoutIntegrationSequence(void) {
 
     vTaskDelay(pdMS_TO_TICKS(11000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+    ubTestPassCount += testCheckState(STATE_MACHINE_FAULT);
 
 
     /*
      * Recover again.
      */
-    s_postTestEvent(SM_EVENT_RESET, 500);
+    testPostEvent(SM_EVENT_RESET, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     /* ============================================================
@@ -302,20 +417,20 @@ void testMotionTimeoutIntegrationSequence(void) {
     ESP_LOGW(TAG, "PRESS UPPER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_STOWED);
 
     ESP_LOGW(TAG, "RELEASE UPPER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_STOWED);
 
 
     /*
      * Begin normal lowering.
      */
-    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 500);
+    testPostEvent(SM_EVENT_NOZZLE_EXTEND, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
+    ubTestPassCount += testCheckState(STATE_MACHINE_LOWERING);
 
 
     /*
@@ -330,14 +445,14 @@ void testMotionTimeoutIntegrationSequence(void) {
      * LOWER_LIMIT_ACTIVE should cause:
      *
      * LOWERING.cbDeinit()
-     *      ├── servo stop
-     *      └── motionTimeoutStop()
+     *   ├── disable servo PWM output
+     *   └── stop motion timeout
      *
      * then:
      *
      * LOWERING -> DEPLOYED
      */
-    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_DEPLOYED);
 
 
     /*
@@ -349,7 +464,7 @@ void testMotionTimeoutIntegrationSequence(void) {
     ESP_LOGW(TAG,"Waiting 11 seconds to verify timeout was cancelled...");
     vTaskDelay(pdMS_TO_TICKS(11000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_DEPLOYED);
 
 
     /* ============================================================
@@ -367,6 +482,11 @@ void testMotionTimeoutIntegrationSequence(void) {
             ubTestCount
         );
     }
+
+test_cleanup:
+
+    limitSwitchDeinit();
+    s_testBaseDeinit();
 
     ESP_LOGW(TAG, "=== END MOTION TIMEOUT INTEGRATION TEST ===");
 }
