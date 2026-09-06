@@ -10,7 +10,7 @@
 #include "nozzle_servo.h"
 
 
-const char* TAG = "TEST_NOZZLE_SERVO";
+static const char* TAG = "TEST_NOZZLE_SERVO";
 
 
 void testNozzleServoSequence(void) {
