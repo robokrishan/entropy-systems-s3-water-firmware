@@ -1,9 +1,13 @@
 #include "tests.h"
+
+#include <stdio.h>
+
 #include "esp_err.h"
 #include "esp_log.h"
 
 #include "i2c.h"
 #include "ina226.h"
+#include "ssd1306.h"
 
 static const char* TAG = "TEST_DIAGNOSTICS";
 
@@ -47,26 +51,10 @@ static esp_err_t s_updateDiagnosticsDisplay(void) {
     char cCurrentText[22] = {0};
     char cPowerText[22] = {0};
 
-    snprintf(
-        cVoltageText,
-        sizeof(cVoltageText),
-        "BAT: %.2f V",
-        fBusVoltageV
-    );
-
-    snprintf(
-        cCurrentText,
-        sizeof(cCurrentText),
-        "CUR: %.2f mA",
-        fCurrentA * 1000.0f
-    );
-
-    snprintf(
-        cPowerText,
-        sizeof(cPowerText),
-        "PWR: %.1f mW",
-        fPowerW * 1000.0f
-    );
+    // parse display texts
+    snprintf(cVoltageText, sizeof(cVoltageText), "BAT: %.2f V", fBusVoltageV);
+    snprintf(cCurrentText, sizeof(cCurrentText), "CUR: %.2f mA", fCurrentA * 1000.0f);
+    snprintf(cPowerText, sizeof(cPowerText), "PWR: %.1f mW", fPowerW * 1000.0f);
 
     lErr = ssd1306WriteText(0, "WATER SAMPLER");
     if(lErr) {
@@ -93,8 +81,45 @@ static esp_err_t s_updateDiagnosticsDisplay(void) {
 
 
 void testSsd1306Diagnostics(void) {
-    ESP_ERROR_CHECK(i2cBusInit());
-    ESP_ERROR_CHECK(ina226Init());
-    ESP_ERROR_CHECK(ssd1306Init());
-    ESP_ERROR_CHECK(s_updateDiagnosticsDisplay());
+    esp_err_t lErr = ESP_OK;
+
+    ESP_LOGW(TAG, "=== TEST: SSD1306 DIAGNOSTICS ===");
+
+    lErr = i2cBusInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to initialize I2C bus. Code: 0x%X", lErr);
+
+        goto test_cleanup;
+    }
+
+    lErr = ina226Init();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to initialize INA226. Code: 0x%X", lErr);
+
+        goto test_cleanup;
+    }
+
+    lErr = ssd1306Init();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to initialize SSD1306. Code: 0x%X", lErr);
+
+        goto test_cleanup;
+    }
+
+    lErr = s_updateDiagnosticsDisplay();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to update diagnostics display. Code: 0x%X", lErr);
+
+        goto test_cleanup;
+    }
+
+    ESP_LOGI(TAG, "Diagnostics display test PASSED");
+
+test_cleanup:
+
+    ssd1306Deinit();
+    ina226Deinit();
+    i2cBusDeinit();
+
+    ESP_LOGW(TAG, "=== END SSD1306 DIAGNOSTICS TEST ===");
 }
