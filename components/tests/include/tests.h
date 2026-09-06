@@ -110,15 +110,64 @@ void testNozzleServoNeutral(void);
 void testPumpSequence(void);
 
 
+/**
+ * @brief Test limit-switch integration with the state machine.
+ *
+ * Verifies upper and lower limit-switch detection, startup position
+ * synchronization, and the expected state transitions when each physical
+ * limit is activated and released.
+ *
+ * The test also verifies that simultaneous activation of both limit switches
+ * triggers FAULT, that the fault remains latched after the switches are
+ * released, and that RESET returns the system to POSITION_UNKNOWN.
+ *
+ * The test initializes and deinitializes all required components internally.
+ */
 void testLimitSwitchSequence(void);
 
 
+/**
+ * @brief Test basic motion-timeout behavior.
+ *
+ * Verifies that an active motion timeout triggers the expected fault event,
+ * that a stopped timeout does not trigger a fault, and that restarting an
+ * active timeout resets its expiry period.
+ *
+ * The test also verifies fault recovery through RESET.
+ *
+ * The test initializes and deinitializes all required components internally.
+ */
 void testMotionTimeoutSequence(void);
 
 
+/**
+ * @brief Test motion-timeout integration during nozzle movement.
+ *
+ * Verifies that nozzle movement enters FAULT when the configured motion
+ * timeout expires before the expected limit switch is reached.
+ *
+ * The test exercises both lowering and raising timeout scenarios and also
+ * verifies that reaching the expected limit switch before timeout completes
+ * the movement normally without a later timeout fault.
+ *
+ * The test initializes and deinitializes all required components internally.
+ */
 void testMotionTimeoutIntegrationSequence(void);
 
 
+/**
+ * @brief Test RC input signal-loss detection and state-machine response.
+ *
+ * Verifies that loss of valid RC PWM input is detected after the configured
+ * signal timeout and converted into SM_EVENT_RC_SIGNAL_LOST.
+ *
+ * The test confirms that signal loss while pumping stops the pump and returns
+ * the system to DEPLOYED, and that RC input processing resumes when valid
+ * signals are restored.
+ *
+ * The test initializes and deinitializes all required base and RC input
+ * components internally.
+ */
 void testRcSignalLossSequence(void);
 
 
@@ -172,15 +221,51 @@ void testRcPumpIntegrationSequence(void);
 void testRcNozzleIntegrationSequence(void);
 
 
+/**
+ * @brief Test basic INA226 initialization and measurement reads.
+ *
+ * Initializes the shared I2C bus and INA226 sensor, then verifies that
+ * bus voltage, shunt voltage, current, and power measurements can be read
+ * successfully from the device.
+ *
+ * The INA226 component and I2C bus are deinitialized before the test exits.
+ */
 void testIna226Basic(void);
 
 
+/**
+ * @brief Test basic SSD1306 initialization.
+ *
+ * Initializes the shared I2C bus and SSD1306 display to verify that the
+ * display can be added to the bus and configured successfully.
+ *
+ * The SSD1306 component and I2C bus are deinitialized before the test exits.
+ */
 void testSsd1306Basic(void);
 
 
+/**
+ * @brief Test text output on the SSD1306 display.
+ *
+ * Initializes the shared I2C bus and SSD1306 display, then writes several
+ * test strings to different display rows to verify basic text rendering.
+ *
+ * The SSD1306 component and I2C bus are deinitialized before the test exits,
+ * including when an intermediate write operation fails.
+ */
 void testSsd1306WriteText(void);
 
 
+/**
+ * @brief Test INA226 measurement output on the SSD1306 diagnostics display.
+ *
+ * Initializes the shared I2C bus, INA226 sensor, and SSD1306 display,
+ * reads the current voltage, current, and power measurements, and renders
+ * the formatted values on the OLED.
+ *
+ * All initialized components are deinitialized before the test exits,
+ * including when an intermediate operation fails.
+ */
 void testSsd1306Diagnostics(void);
 
 
