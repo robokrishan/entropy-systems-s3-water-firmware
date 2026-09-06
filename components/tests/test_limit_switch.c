@@ -1,14 +1,92 @@
 #include "tests.h"
+#include "test_helpers.h"
+
+#include <stdint.h>
+
 #include "esp_log.h"
+#include "esp_err.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "nozzle_servo.h"
 #include "limit_switch.h"
+#include "pump.h"
+#include "motion_timeout.h"
+
+#include "state_machine.h"
+#include "state_machine_states.h"
+#include "state_machine_common.h"
 
 
-const char* TAG = "TEST_LIMIT_SWITCH";
+static const char* TAG = "TEST_LIMIT_SWITCH";
 
+
+static void s_testDeinit(void) {
+    limitSwitchDeinit();
+    stateMachineDeinit();
+    motionTimeoutDeinit();
+    pumpDeinit();
+    nozzleServoDeinit();
+}
+
+
+static esp_err_t s_testInit(void) {
+    esp_err_t lErr = ESP_OK;
+
+    lErr = nozzleServoInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init nozzle servo. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    lErr = pumpInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init pump. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    lErr = motionTimeoutInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init motion timeout. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    lErr = stateMachineStatesRegister();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to register states. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    lErr = stateMachineInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init state machine. Code: 0x%X", lErr);
+
+        goto init_fail;
+    }
+
+    return ESP_OK;
+
+init_fail:
+
+    s_testDeinit();
+
+    return lErr;
+}
 
 
 void testLimitSwitchSequence(void) {
+    esp_err_t lErr = s_testInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init test components. Code: 0x%X", lErr);
+
+        return;
+    }
+
     uint8_t ubTestPassCount = 0;
     const uint8_t ubTestCount = 11;
 
@@ -23,18 +101,25 @@ void testLimitSwitchSequence(void) {
      * Both switches are released, so synchronization should
      * leave the mechanism position unknown.
      */
-    s_postTestEvent(SM_EVENT_SYSTEM_READY, 500);
+    testPostEvent(SM_EVENT_SYSTEM_READY, 500);
 
-    esp_err_t lErr = limitSwitchSyncState();
+    lErr = limitSwitchInit();
+    if(lErr) {
+        ESP_LOGE(TAG, "Failed to init limit switches. Code: 0x%X", lErr);
+
+        goto test_cleanup;
+    }
+
+    lErr = limitSwitchSyncState();
     if(lErr) {
         ESP_LOGE(TAG, "Failed to synchronize limit switches. Code: 0x%X", lErr);
 
-        return;
+        goto test_cleanup;
     }
 
     vTaskDelay(pdMS_TO_TICKS(500));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     /*
@@ -47,7 +132,7 @@ void testLimitSwitchSequence(void) {
     ESP_LOGW(TAG, "PRESS UPPER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_STOWED);
 
 
     /*
@@ -62,16 +147,16 @@ void testLimitSwitchSequence(void) {
     ESP_LOGW(TAG, "RELEASE UPPER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_STOWED);
 
     /*
      * Begin lowering.
      *
      * STOWED -> LOWERING
      */
-    s_postTestEvent(SM_EVENT_NOZZLE_EXTEND, 500);
+    testPostEvent(SM_EVENT_NOZZLE_EXTEND, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_LOWERING);
+    ubTestPassCount += testCheckState(STATE_MACHINE_LOWERING);
 
     /*
      * TEST LOWER LIMIT ACTIVE
@@ -85,7 +170,7 @@ void testLimitSwitchSequence(void) {
     ESP_LOGW(TAG, "PRESS LOWER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_DEPLOYED);
 
     /*
      * TEST LOWER LIMIT RELEASED
@@ -99,16 +184,16 @@ void testLimitSwitchSequence(void) {
     ESP_LOGW(TAG, "RELEASE LOWER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_DEPLOYED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_DEPLOYED);
 
     /*
      * Begin raising.
      *
      * DEPLOYED -> RAISING
      */
-    s_postTestEvent(SM_EVENT_NOZZLE_RETRACT, 500);
+    testPostEvent(SM_EVENT_NOZZLE_RETRACT, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_RAISING);
+    ubTestPassCount += testCheckState(STATE_MACHINE_RAISING);
 
     /*
      * TEST UPPER LIMIT ACTIVE DURING RAISING
@@ -120,7 +205,7 @@ void testLimitSwitchSequence(void) {
     ESP_LOGW(TAG, "PRESS UPPER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_STOWED);
+    ubTestPassCount += testCheckState(STATE_MACHINE_STOWED);
 
     /*
      * TEST INVALID PHYSICAL CONDITION
@@ -132,7 +217,7 @@ void testLimitSwitchSequence(void) {
     ESP_LOGW(TAG, "KEEP UPPER PRESSED and PRESS LOWER limit switch now");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+    ubTestPassCount += testCheckState(STATE_MACHINE_FAULT);
 
     /*
      * Release both switches.
@@ -142,7 +227,7 @@ void testLimitSwitchSequence(void) {
     ESP_LOGW(TAG, "RELEASE BOTH limit switches now");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_FAULT);
+    ubTestPassCount += testCheckState(STATE_MACHINE_FAULT);
 
     /*
      * Reset fault.
@@ -150,9 +235,9 @@ void testLimitSwitchSequence(void) {
      * Neither physical endpoint is currently asserted,
      * therefore position returns to unknown.
      */
-    s_postTestEvent(SM_EVENT_RESET, 500);
+    testPostEvent(SM_EVENT_RESET, 500);
 
-    ubTestPassCount += s_checkState(STATE_MACHINE_POSITION_UNKNOWN);
+    ubTestPassCount += testCheckState(STATE_MACHINE_POSITION_UNKNOWN);
 
 
     if(ubTestPassCount == ubTestCount) {
@@ -166,6 +251,10 @@ void testLimitSwitchSequence(void) {
             ubTestCount
         );
     }
+
+test_cleanup:
+
+    s_testDeinit();
 
     ESP_LOGW(TAG, "=== END LIMIT SWITCH TEST ===");
 }
